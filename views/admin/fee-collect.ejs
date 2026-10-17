@@ -1,0 +1,100 @@
+<div class="d-flex justify-content-between mb-4">
+  <h5 class="fw-bold mb-0"><i class="fa-solid fa-hand-holding-dollar text-success me-2"></i>Collect Fees</h5>
+  <a href="/admin/fees" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-arrow-left me-1"></i>Back</a>
+</div>
+
+<!-- Step 1: Select Class & Student -->
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <form method="GET" class="row g-3 align-items-end">
+      <div class="col-md-4">
+        <label class="form-label">Select Class</label>
+        <select name="class_id" class="form-select" onchange="this.form.submit()">
+          <option value="">-- Select Class --</option>
+          <% classes.forEach(c => { %><option value="<%- c.id %>" <%- class_id == c.id ? 'selected' : '' %>><%- c.name %> - <%- c.section %></option><% }) %>
+        </select>
+      </div>
+      <% if(students.length > 0) { %>
+      <div class="col-md-4">
+        <label class="form-label">Select Student</label>
+        <select name="student_id" class="form-select" onchange="this.form.submit()">
+          <option value="">-- Select Student --</option>
+          <% students.forEach(s => { %><option value="<%- s.id %>" <%- student_id == s.id ? 'selected' : '' %>><%- s.name %> (<%- s.admission_no %>)</option><% }) %>
+        </select>
+      </div>
+      <input type="hidden" name="class_id" value="<%- class_id %>">
+      <% } %>
+    </form>
+  </div>
+</div>
+
+<% if(selectedStudent) { %>
+<div class="row g-4">
+  <!-- Collect Form -->
+  <div class="col-md-5">
+    <div class="card shadow-sm">
+      <div class="card-header bg-success text-white">
+        <h6 class="mb-0"><i class="fa-solid fa-receipt me-1"></i>Collect Payment</h6>
+      </div>
+      <div class="card-body">
+        <div class="alert alert-info py-2 mb-3">
+          <strong><%- selectedStudent.name %></strong><br>
+          <small><%- selectedStudent.admission_no %></small>
+        </div>
+        <form action="/admin/fees/collect" method="POST">
+          <input type="hidden" name="student_id" value="<%- student_id %>">
+          <input type="hidden" name="class_id" value="<%- class_id %>">
+          <div class="mb-3">
+            <label class="form-label">Fee Type *</label>
+            <select name="fee_structure_id" class="form-select" required>
+              <option value="">Select Fee</option>
+              <% feeStructures.forEach(fs => { %><option value="<%- fs.id %>"><%- fs.fee_type %> (₹<%- fs.amount %>)</option><% }) %>
+            </select>
+          </div>
+          <div class="mb-3"><label class="form-label">Amount (₹) *</label><input type="number" name="amount_paid" class="form-control" step="0.01" required></div>
+          <div class="mb-3">
+            <label class="form-label">Payment Mode</label>
+            <select name="payment_mode" class="form-select">
+              <option>Cash</option><option>Online</option><option>Cheque</option><option>DD</option>
+            </select>
+          </div>
+          <div class="mb-3"><label class="form-label">Remarks</label><textarea name="remarks" class="form-control" rows="2"></textarea></div>
+          <button type="submit" class="btn btn-success w-100"><i class="fa-solid fa-check me-1"></i>Collect & Generate Receipt</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Payment History -->
+  <div class="col-md-7">
+    <div class="card shadow-sm">
+      <div class="card-header d-flex justify-content-between">
+        <h6 class="mb-0 fw-bold">Payment History</h6>
+        <a href="/admin/fees/reminder/<%- student_id %>" target="_blank" class="btn btn-sm btn-outline-warning">
+          <i class="fa-solid fa-bell me-1"></i>Send Reminder
+        </a>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm align-middle mb-0">
+          <thead class="table-light"><tr><th>Date</th><th>Fee Type</th><th>Amount</th><th>Mode</th><th>Receipt</th></tr></thead>
+          <tbody>
+            <% if(payments.length > 0) { %>
+              <% payments.forEach(p => { %>
+              <tr>
+                <td><%- new Date(p.payment_date).toLocaleDateString('en-IN') %></td>
+                <td><%- p.fee_type %></td>
+                <td><strong>₹<%- parseFloat(p.amount_paid).toLocaleString('en-IN') %></strong></td>
+                <td><span class="badge bg-light text-dark"><%- p.payment_mode %></span></td>
+                <td><a href="/admin/fees/receipt/<%- p.id %>" target="_blank" class="btn btn-xs btn-outline-primary btn-sm"><i class="fa-solid fa-download"></i></a></td>
+              </tr>
+              <% }) %>
+            <% } else { %>
+              <tr><td colspan="5" class="text-center text-muted py-3">No payments yet</td></tr>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+<% } %>

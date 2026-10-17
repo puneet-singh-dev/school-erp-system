@@ -1,0 +1,135 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h5 class="fw-bold mb-0"><i class="fa-solid fa-user-graduate text-primary me-2"></i><%- student ? 'Edit Student' : 'Add New Student' %></h5>
+  <a href="/admin/students" class="btn btn-outline-secondary"><i class="fa-solid fa-arrow-left me-1"></i>Back</a>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body">
+    <form action="<%- student ? '/admin/students/edit/' + student.id : '/admin/students/add' %>" method="POST">
+      <h6 class="fw-bold text-primary mb-3"><i class="fa-solid fa-user me-1"></i> Personal Information</h6>
+      <div class="row g-3 mb-4">
+        <div class="col-md-4">
+          <label class="form-label">Full Name *</label>
+          <input type="text" name="name" class="form-control" value="<%- student ? student.name : '' %>" required>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Email *</label>
+          <input type="email" name="email" class="form-control" value="<%- student ? student.email : '' %>" required>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Phone</label>
+          <input type="text" name="phone" class="form-control" value="<%- student ? student.phone : '' %>">
+        </div>
+        <% if(!student) { %>
+        <div class="col-md-4">
+          <label class="form-label">Password <small class="text-muted">(default: student123)</small></label>
+          <input type="password" name="password" class="form-control" placeholder="Leave blank for default">
+        </div>
+        <% } %>
+        <div class="col-md-4">
+          <label class="form-label">Date of Birth</label>
+          <input type="date" name="date_of_birth" class="form-control" value="<%- student && student.date_of_birth ? new Date(student.date_of_birth).toISOString().split('T')[0] : '' %>">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Gender</label>
+          <select name="gender" class="form-select">
+            <option value="">Select</option>
+            <% ['Male','Female','Other'].forEach(g => { %>
+            <option <%- student && student.gender === g ? 'selected' : '' %>><%- g %></option>
+            <% }) %>
+          </select>
+        </div>
+        <div class="col-md-12">
+          <label class="form-label">Address</label>
+          <textarea name="address" class="form-control" rows="2"><%- student ? student.address : '' %></textarea>
+        </div>
+      </div>
+
+      <h6 class="fw-bold text-primary mb-3"><i class="fa-solid fa-school me-1"></i> Academic Information</h6>
+      <div class="row g-3 mb-4">
+        <div class="col-md-4">
+          <label class="form-label">
+            Admission No
+            <% if(!student) { %><span class="badge bg-info ms-1">Auto-generated if blank</span><% } %>
+          </label>
+          <div class="input-group">
+            <input type="text" name="admission_no" id="admissionNo" class="form-control"
+              value="<%- student ? student.admission_no : '' %>"
+              placeholder="<%- student ? '' : 'e.g. ADM260001 (auto)' %>"
+              <%- student ? 'readonly' : '' %>>
+            <% if(!student) { %>
+            <button type="button" class="btn btn-outline-secondary" onclick="previewAdmNo()" title="Preview next number">
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+            </button>
+            <% } %>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Class</label>
+          <select name="class_id" id="classSelect" class="form-select" onchange="previewRoll(this.value)">
+            <option value="">Select Class</option>
+            <% classes.forEach(c => { %>
+            <option value="<%- c.id %>" <%- student && student.class_id == c.id ? 'selected' : '' %>><%- c.name %> - <%- c.section %></option>
+            <% }) %>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">
+            Roll Number
+            <% if(!student) { %><span class="badge bg-info ms-1">Auto-assigned if blank</span><% } %>
+          </label>
+          <input type="number" name="roll_number" id="rollNo" class="form-control"
+            value="<%- student ? student.roll_number : '' %>"
+            placeholder="<%- student ? '' : 'Auto after class selection' %>">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Admission Date</label>
+          <input type="date" name="admission_date" class="form-control" value="<%- student && student.admission_date ? new Date(student.admission_date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0] %>">
+        </div>
+      </div>
+
+      <h6 class="fw-bold text-primary mb-3"><i class="fa-solid fa-people-roof me-1"></i> Guardian Information</h6>
+      <div class="row g-3 mb-4">
+        <div class="col-md-6">
+          <label class="form-label">Guardian Name</label>
+          <input type="text" name="guardian_name" class="form-control" value="<%- student ? student.guardian_name : '' %>">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Guardian Phone</label>
+          <input type="text" name="guardian_phone" class="form-control" value="<%- student ? student.guardian_phone : '' %>">
+        </div>
+      </div>
+
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary px-4">
+          <i class="fa-solid fa-save me-1"></i><%- student ? 'Update Student' : 'Add Student' %>
+        </button>
+        <a href="/admin/students" class="btn btn-outline-secondary px-4">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<% if(!student) { %>
+<script>
+async function previewAdmNo() {
+  const r = await fetch('/admin/api/next-ids');
+  const d = await r.json();
+  document.getElementById('admissionNo').value = d.admission_no;
+  document.getElementById('admissionNo').placeholder = '';
+}
+async function previewRoll(classId) {
+  if (!classId) return;
+  const r = await fetch('/admin/api/next-ids?class_id=' + classId);
+  const d = await r.json();
+  if (!document.getElementById('rollNo').value) {
+    document.getElementById('rollNo').placeholder = 'Next: ' + d.roll_number;
+  }
+}
+// Auto-preview on load if class already selected
+window.addEventListener('load', () => {
+  const sel = document.getElementById('classSelect');
+  if (sel.value) previewRoll(sel.value);
+});
+</script>
+<% } %>

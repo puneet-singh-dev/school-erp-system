@@ -1,0 +1,63 @@
+<div class="d-flex justify-content-between mb-4">
+  <h5 class="fw-bold mb-0"><i class="fa-solid fa-indian-rupee-sign text-success me-2"></i>Fee Management</h5>
+</div>
+
+<div class="row g-4">
+  <!-- Add Fee Structure -->
+  <div class="col-md-4">
+    <div class="card shadow-sm">
+      <div class="card-header"><h6 class="mb-0 fw-bold"><i class="fa-solid fa-plus me-1"></i>Add Fee Structure</h6></div>
+      <div class="card-body">
+        <form action="/admin/fees/structure/add" method="POST">
+          <div class="mb-3">
+            <label class="form-label">Class *</label>
+            <select name="class_id" class="form-select" required>
+              <option value="">Select Class</option>
+              <% classes.forEach(c => { %><option value="<%- c.id %>"><%- c.name %> - <%- c.section %></option><% }) %>
+            </select>
+          </div>
+          <div class="mb-3"><label class="form-label">Fee Type *</label><input type="text" name="fee_type" class="form-control" placeholder="Tuition Fee, Exam Fee..." required></div>
+          <div class="mb-3"><label class="form-label">Amount (₹) *</label><input type="number" name="amount" class="form-control" step="0.01" required></div>
+          <div class="mb-3"><label class="form-label">Due Date</label><input type="date" name="due_date" class="form-control"></div>
+          <div class="mb-3"><label class="form-label">Academic Year *</label><input type="text" name="academic_year" class="form-control" value="2024-25" required></div>
+          <button type="submit" class="btn btn-success w-100">Add Fee Structure</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fee Structure List -->
+  <div class="col-md-8">
+    <div class="card shadow-sm">
+      <div class="card-header d-flex justify-content-between">
+        <h6 class="mb-0 fw-bold">Fee Structures</h6>
+        <a href="/admin/fees/collect" class="btn btn-sm btn-primary"><i class="fa-solid fa-hand-holding-dollar me-1"></i>Collect Fee</a>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+          <thead class="table-dark"><tr><th>Class</th><th>Fee Type</th><th>Amount</th><th>Due Date</th><th>Year</th><th>Action</th></tr></thead>
+          <tbody>
+            <% if(feeStructures.length > 0) { %>
+              <% feeStructures.forEach(fs => { %>
+              <tr>
+                <td><%- fs.class_name %> - <%- fs.section %></td>
+                <td><span class="badge bg-info text-dark"><%- fs.fee_type %></span></td>
+                <td><strong>₹<%- parseFloat(fs.amount).toLocaleString('en-IN') %></strong></td>
+                <td><%- fs.due_date ? new Date(fs.due_date).toLocaleDateString('en-IN') : '-' %></td>
+                <td><%- fs.academic_year %></td>
+                <td>
+                  <form action="/admin/fees/structure/delete/<%- fs.id %>" method="POST" onsubmit="return confirm('Delete this fee?')">
+                    <button class="btn btn-sm btn-outline-danger"><i class="fa-solid fa-trash"></i></button>
+                  </form>
+                </td>
+              </tr>
+              <% }) %>
+            <% } else { %>
+              <tr><td colspan="6" class="text-center py-4 text-muted">No fee structures defined</td></tr>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>

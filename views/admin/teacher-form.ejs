@@ -1,0 +1,58 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h5 class="fw-bold mb-0"><%- teacher ? 'Edit Teacher' : 'Add New Teacher' %></h5>
+  <a href="/admin/teachers" class="btn btn-outline-secondary"><i class="fa-solid fa-arrow-left me-1"></i>Back</a>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body">
+    <form action="<%- teacher ? '/admin/teachers/edit/' + teacher.id : '/admin/teachers/add' %>" method="POST">
+      <h6 class="fw-bold text-success mb-3">Personal Information</h6>
+      <div class="row g-3 mb-4">
+        <div class="col-md-4"><label class="form-label">Full Name *</label><input type="text" name="name" class="form-control" value="<%- teacher ? teacher.name : '' %>" required></div>
+        <div class="col-md-4"><label class="form-label">Email *</label><input type="email" name="email" class="form-control" value="<%- teacher ? teacher.email : '' %>" required></div>
+        <div class="col-md-4"><label class="form-label">Phone</label><input type="text" name="phone" class="form-control" value="<%- teacher ? teacher.phone : '' %>"></div>
+        <% if(!teacher) { %>
+        <div class="col-md-4"><label class="form-label">Password <small>(default: teacher123)</small></label><input type="password" name="password" class="form-control"></div>
+        <% } %>
+        <div class="col-md-8"><label class="form-label">Address</label><input type="text" name="address" class="form-control" value="<%- teacher ? teacher.address : '' %>"></div>
+      </div>
+      <h6 class="fw-bold text-success mb-3">Employment Details</h6>
+      <div class="row g-3 mb-4">
+        <div class="col-md-4">
+          <label class="form-label">
+            Employee ID
+            <% if(!teacher) { %><span class="badge bg-info ms-1">Auto-generated if blank</span><% } %>
+          </label>
+          <div class="input-group">
+            <input type="text" name="employee_id" id="empId" class="form-control"
+              value="<%- teacher ? teacher.employee_id : '' %>"
+              placeholder="<%- teacher ? '' : 'e.g. EMP260001 (auto)' %>"
+              <%- teacher ? 'readonly' : '' %>>
+            <% if(!teacher) { %>
+            <button type="button" class="btn btn-outline-secondary" onclick="previewEmpId()" title="Preview next ID">
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+            </button>
+            <% } %>
+          </div>
+        </div>
+        <div class="col-md-4"><label class="form-label">Department</label><input type="text" name="department" class="form-control" value="<%- teacher ? teacher.department : '' %>"></div>
+        <div class="col-md-4"><label class="form-label">Designation</label><input type="text" name="designation" class="form-control" value="<%- teacher ? teacher.designation : '' %>"></div>
+        <div class="col-md-4"><label class="form-label">Date of Joining</label><input type="date" name="date_of_joining" class="form-control" value="<%- teacher && teacher.date_of_joining ? new Date(teacher.date_of_joining).toISOString().split('T')[0] : '' %>"></div>
+        <div class="col-md-4"><label class="form-label">Qualification</label><input type="text" name="qualification" class="form-control" value="<%- teacher ? teacher.qualification : '' %>"></div>
+        <div class="col-md-4"><label class="form-label">Salary (₹)</label><input type="number" name="salary" class="form-control" step="0.01" value="<%- teacher ? teacher.salary : '' %>"></div>
+      </div>
+      <button type="submit" class="btn btn-success px-4"><i class="fa-solid fa-save me-1"></i><%- teacher ? 'Update' : 'Add Teacher' %></button>
+    </form>
+  </div>
+</div>
+
+<% if(!teacher) { %>
+<script>
+async function previewEmpId() {
+  const r = await fetch('/admin/api/next-ids?type=teacher');
+  const d = await r.json();
+  document.getElementById('empId').value = d.employee_id;
+  document.getElementById('empId').placeholder = '';
+}
+</script>
+<% } %>

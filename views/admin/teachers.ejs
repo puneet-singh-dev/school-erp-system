@@ -1,0 +1,47 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h5 class="fw-bold mb-0"><i class="fa-solid fa-chalkboard-user text-success me-2"></i>Teachers Management</h5>
+  <a href="/admin/teachers/add" class="btn btn-success"><i class="fa-solid fa-plus me-2"></i>Add Teacher</a>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-dark">
+          <tr><th>#</th><th>Name</th><th>Employee ID</th><th>Department</th><th>Designation</th><th>Phone</th><th>Status</th><th>Actions</th></tr>
+        </thead>
+        <tbody>
+          <% if(teachers.length > 0) { %>
+            <% teachers.forEach((t, i) => { %>
+            <tr>
+              <td><%- i+1 %></td>
+              <td>
+                <div class="d-flex align-items-center gap-2">
+                  <div class="avatar-circle bg-success"><%- t.name.charAt(0) %></div>
+                  <div><div class="fw-semibold"><%- t.name %></div><small class="text-muted"><%- t.email %></small></div>
+                </div>
+              </td>
+              <td><span class="badge bg-secondary"><%- t.employee_id %></span></td>
+              <td><%- t.department || '-' %></td>
+              <td><%- t.designation || '-' %></td>
+              <td><%- t.phone || '-' %></td>
+              <td><span class="badge <%- t.is_active ? 'bg-success' : 'bg-danger' %>"><%- t.is_active ? 'Active' : 'Inactive' %></span></td>
+              <td>
+                <div class="btn-group btn-group-sm">
+                  <a href="/admin/teachers/edit/<%- t.id %>" class="btn btn-outline-primary"><i class="fa-solid fa-pen"></i></a>
+                  <form action="/admin/teachers/delete/<%- t.id %>" method="POST" onsubmit="return confirm('Delete this teacher?')">
+                    <button type="submit" class="btn btn-outline-danger"><i class="fa-solid fa-trash"></i></button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            <% }) %>
+          <% } else { %>
+            <tr><td colspan="8" class="text-center text-muted py-5"><i class="fa-solid fa-inbox fa-2x d-block mb-2"></i>No teachers found</td></tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+    <div class="card-footer text-muted">Total: <strong><%- teachers.length %></strong> teachers</div>
+  </div>
+</div>

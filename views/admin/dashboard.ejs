@@ -1,0 +1,121 @@
+<!-- Stats Cards -->
+<div class="row g-4 mb-4">
+  <div class="col-xl-3 col-md-6">
+    <div class="stat-card bg-primary text-white">
+      <div class="stat-icon"><i class="fa-solid fa-user-graduate"></i></div>
+      <div><div class="stat-num"><%- totalStudents %></div><div class="stat-label">Total Students</div></div>
+    </div>
+  </div>
+  <div class="col-xl-3 col-md-6">
+    <div class="stat-card bg-success text-white">
+      <div class="stat-icon"><i class="fa-solid fa-chalkboard-user"></i></div>
+      <div><div class="stat-num"><%- totalTeachers %></div><div class="stat-label">Total Teachers</div></div>
+    </div>
+  </div>
+  <div class="col-xl-3 col-md-6">
+    <div class="stat-card bg-warning text-dark">
+      <div class="stat-icon"><i class="fa-solid fa-door-open"></i></div>
+      <div><div class="stat-num"><%- totalClasses %></div><div class="stat-label">Total Classes</div></div>
+    </div>
+  </div>
+  <div class="col-xl-3 col-md-6">
+    <div class="stat-card bg-info text-white">
+      <div class="stat-icon"><i class="fa-solid fa-indian-rupee-sign"></i></div>
+      <div><div class="stat-num">₹<%- parseFloat(feesCollected).toFixed(0) %></div><div class="stat-label">Fees This Month</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Charts Row -->
+<div class="row g-4 mb-4">
+  <div class="col-lg-8">
+    <div class="card shadow-sm">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0 fw-bold"><i class="fa-solid fa-chart-line me-2 text-primary"></i>Fee Collection (Last 6 Months)</h6>
+      </div>
+      <div class="card-body"><canvas id="feeChart" height="100"></canvas></div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card shadow-sm">
+      <div class="card-header">
+        <h6 class="mb-0 fw-bold"><i class="fa-solid fa-chart-pie me-2 text-success"></i>Attendance This Month</h6>
+      </div>
+      <div class="card-body d-flex justify-content-center"><canvas id="attChart" height="200"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<!-- Recent Students & Notices -->
+<div class="row g-4">
+  <div class="col-lg-8">
+    <div class="card shadow-sm">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0 fw-bold"><i class="fa-solid fa-user-plus me-2 text-primary"></i>Recent Admissions</h6>
+        <a href="/admin/students" class="btn btn-sm btn-outline-primary">View All</a>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead class="table-light"><tr><th>Name</th><th>Adm. No</th><th>Class</th><th>Date</th></tr></thead>
+            <tbody>
+              <% recentStudents.forEach(s => { %>
+              <tr>
+                <td><i class="fa-solid fa-user-circle text-primary me-1"></i><%- s.name %></td>
+                <td><span class="badge bg-secondary"><%- s.admission_no %></span></td>
+                <td><%- s.class_name || 'N/A' %></td>
+                <td><%- new Date(s.admission_date).toLocaleDateString('en-IN') %></td>
+              </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card shadow-sm">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0 fw-bold"><i class="fa-solid fa-bullhorn me-2 text-warning"></i>Recent Notices</h6>
+        <a href="/admin/notices" class="btn btn-sm btn-outline-primary">Manage</a>
+      </div>
+      <div class="card-body">
+        <% if(notices.length > 0) { %>
+          <% notices.forEach(n => { %>
+          <div class="notice-item mb-3">
+            <div class="fw-semibold text-dark"><%- n.title %></div>
+            <small class="text-muted"><%- new Date(n.created_at).toLocaleDateString('en-IN') %></small>
+            <span class="badge bg-light text-dark ms-1"><%- n.target_role %></span>
+          </div>
+          <% }) %>
+        <% } else { %>
+          <p class="text-muted text-center">No notices yet</p>
+        <% } %>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const feeData = <%- JSON.stringify(feeMonthly) %>;
+new Chart(document.getElementById('feeChart'), {
+  type: 'bar',
+  data: {
+    labels: feeData.map(d => d.month),
+    datasets: [{ label: 'Fees Collected (₹)', data: feeData.map(d => d.total), backgroundColor: 'rgba(59,130,246,0.7)', borderColor: '#3b82f6', borderWidth: 2, borderRadius: 6 }]
+  },
+  options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+});
+
+const attData = <%- JSON.stringify(attendanceData) %>;
+const attMap = {};
+attData.forEach(a => attMap[a.status] = a.count);
+new Chart(document.getElementById('attChart'), {
+  type: 'doughnut',
+  data: {
+    labels: ['Present', 'Absent', 'Late', 'Leave'],
+    datasets: [{ data: [attMap['Present']||0, attMap['Absent']||0, attMap['Late']||0, attMap['Leave']||0], backgroundColor: ['#22c55e','#ef4444','#f59e0b','#6366f1'], borderWidth: 0 }]
+  },
+  options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+});
+</script>

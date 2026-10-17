@@ -1,0 +1,73 @@
+<div class="d-flex justify-content-between mb-4">
+  <h5 class="fw-bold mb-0"><i class="fa-solid fa-indian-rupee-sign text-success me-2"></i>My Fee Details</h5>
+</div>
+
+<!-- Summary Cards -->
+<div class="row g-3 mb-4">
+  <div class="col-md-4">
+    <div class="stat-card bg-info text-white">
+      <div class="stat-icon"><i class="fa-solid fa-file-invoice"></i></div>
+      <div><div class="stat-num">₹<%- summary ? parseFloat(summary.total_fees).toLocaleString('en-IN') : '0' %></div><div class="stat-label">Total Fees</div></div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="stat-card bg-success text-white">
+      <div class="stat-icon"><i class="fa-solid fa-check-circle"></i></div>
+      <div><div class="stat-num">₹<%- summary ? parseFloat(summary.paid).toLocaleString('en-IN') : '0' %></div><div class="stat-label">Amount Paid</div></div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="stat-card bg-danger text-white">
+      <div class="stat-icon"><i class="fa-solid fa-exclamation-circle"></i></div>
+      <div><div class="stat-num">₹<%- summary ? parseFloat(summary.total_fees - summary.paid).toLocaleString('en-IN') : '0' %></div><div class="stat-label">Balance Due</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4">
+  <!-- Fee Structure -->
+  <div class="col-md-5">
+    <div class="card shadow-sm">
+      <div class="card-header"><h6 class="mb-0 fw-bold">Fee Structure</h6></div>
+      <div class="card-body p-0">
+        <table class="table mb-0">
+          <thead class="table-light"><tr><th>Fee Type</th><th>Amount</th><th>Due Date</th></tr></thead>
+          <tbody>
+            <% feeStructures.forEach(fs => { %>
+            <tr>
+              <td><%- fs.fee_type %></td>
+              <td>₹<%- parseFloat(fs.amount).toLocaleString('en-IN') %></td>
+              <td><%- fs.due_date ? new Date(fs.due_date).toLocaleDateString('en-IN') : '-' %></td>
+            </tr>
+            <% }) %>
+            <% if(!feeStructures.length) { %><tr><td colspan="3" class="text-center text-muted py-3">No fee structure</td></tr><% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Payment History -->
+  <div class="col-md-7">
+    <div class="card shadow-sm">
+      <div class="card-header"><h6 class="mb-0 fw-bold">Payment History</h6></div>
+      <div class="card-body p-0">
+        <table class="table mb-0">
+          <thead class="table-light"><tr><th>Date</th><th>Fee Type</th><th>Amount</th><th>Mode</th><th>Receipt</th></tr></thead>
+          <tbody>
+            <% payments.forEach(p => { %>
+            <tr>
+              <td><%- new Date(p.payment_date).toLocaleDateString('en-IN') %></td>
+              <td><%- p.fee_type %></td>
+              <td><strong>₹<%- parseFloat(p.amount_paid).toLocaleString('en-IN') %></strong></td>
+              <td><span class="badge bg-secondary"><%- p.payment_mode %></span></td>
+              <td><a href="/student/fees/receipt/<%- p.id %>" target="_blank" class="btn btn-sm btn-outline-primary"><i class="fa-solid fa-download"></i></a></td>
+            </tr>
+            <% }) %>
+            <% if(!payments.length) { %><tr><td colspan="5" class="text-center text-muted py-3">No payments yet</td></tr><% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>

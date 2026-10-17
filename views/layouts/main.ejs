@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%- title %> | <%- schoolName %></title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"/>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <link rel="stylesheet" href="/css/style.css"/>
+</head>
+<body>
+  <!-- Sidebar -->
+  <div class="wrapper d-flex">
+    <nav class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="logo-wrap">
+          <i class="fa-solid fa-school-flag fa-2x text-warning"></i>
+          <div class="ms-2">
+            <div class="fw-bold" style="font-size:0.82rem;line-height:1.2;color:#fff;"><%- schoolName %></div>
+            <div style="font-size:0.65rem;color:#a8b8d8;line-height:1.2;margin-top:2px;">
+              <i class="fa-solid fa-location-dot me-1"></i><%- schoolAddress %>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <% if(user && user.role === 'admin') { %>
+      <ul class="sidebar-nav">
+        <li><a href="/admin"><i class="fa-solid fa-gauge-high"></i> Dashboard</a></li>
+        <li class="nav-header">Academic</li>
+        <li><a href="/admin/students"><i class="fa-solid fa-user-graduate"></i> Students</a></li>
+        <li><a href="/admin/teachers"><i class="fa-solid fa-chalkboard-user"></i> Teachers</a></li>
+        <li><a href="/admin/classes"><i class="fa-solid fa-door-open"></i> Classes</a></li>
+        <li><a href="/admin/subjects"><i class="fa-solid fa-book"></i> Subjects</a></li>
+        <li class="nav-header">Operations</li>
+        <li><a href="/admin/attendance"><i class="fa-solid fa-clipboard-check"></i> Attendance</a></li>
+        <li><a href="/admin/attendance/report"><i class="fa-solid fa-chart-bar"></i> Att. Report</a></li>
+        <li class="nav-header">Finance</li>
+        <li><a href="/admin/fees"><i class="fa-solid fa-indian-rupee-sign"></i> Fee Structure</a></li>
+        <li><a href="/admin/fees/collect"><i class="fa-solid fa-hand-holding-dollar"></i> Collect Fees</a></li>
+        <li><a href="/admin/fees/pending"><i class="fa-solid fa-circle-exclamation"></i> Pending Fees</a></li>
+        <li class="nav-header">Results</li>
+        <li><a href="/admin/results"><i class="fa-solid fa-file-pen"></i> Results &amp; Exams</a></li>
+        <li class="nav-header">Communication</li>
+        <li><a href="/admin/notices"><i class="fa-solid fa-bullhorn"></i> Notices</a></li>
+      </ul>
+      <% } else if(user && user.role === 'teacher') { %>
+      <ul class="sidebar-nav">
+        <li><a href="/teacher"><i class="fa-solid fa-gauge-high"></i> Dashboard</a></li>
+        <li class="nav-header">My Work</li>
+        <li><a href="/teacher/attendance"><i class="fa-solid fa-clipboard-check"></i> Mark Attendance</a></li>
+        <li><a href="/teacher/attendance/report"><i class="fa-solid fa-chart-bar"></i> Att. Report</a></li>
+        <li><a href="/teacher/results"><i class="fa-solid fa-file-pen"></i> Results Entry</a></li>
+        <li><a href="/teacher/students"><i class="fa-solid fa-users"></i> My Students</a></li>
+      </ul>
+      <% } else if(user && user.role === 'student') { %>
+      <ul class="sidebar-nav">
+        <li><a href="/student"><i class="fa-solid fa-gauge-high"></i> Dashboard</a></li>
+        <li class="nav-header">Academics</li>
+        <li><a href="/student/attendance"><i class="fa-solid fa-clipboard-check"></i> My Attendance</a></li>
+        <li><a href="/student/results"><i class="fa-solid fa-trophy"></i> My Results</a></li>
+        <li class="nav-header">Finance</li>
+        <li><a href="/student/fees"><i class="fa-solid fa-indian-rupee-sign"></i> My Fees</a></li>
+      </ul>
+      <% } %>
+
+      <div class="sidebar-footer">
+        <form action="/logout" method="POST">
+          <button type="submit" class="btn btn-outline-danger w-100 btn-sm">
+            <i class="fa-solid fa-right-from-bracket me-1"></i> Logout
+          </button>
+        </form>
+      </div>
+    </nav>
+
+    <!-- Content -->
+    <div class="main-content flex-grow-1 d-flex flex-column">
+      <!-- Topbar -->
+      <div class="topbar d-flex align-items-center px-4">
+        <button class="btn btn-sm btn-outline-secondary me-3" id="sidebarToggle">
+          <i class="fa-solid fa-bars"></i>
+        </button>
+        <div class="me-auto">
+          <h6 class="mb-0 fw-semibold text-primary"><%- title %></h6>
+          <small class="text-muted d-none d-md-inline">
+            <i class="fa-solid fa-school me-1"></i><%- schoolName %>
+          </small>
+        </div>
+        <div class="user-info d-flex align-items-center gap-2">
+          <span class="badge bg-primary"><%- user ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : '' %></span>
+          <i class="fa-solid fa-user-circle fa-lg text-muted"></i>
+          <span class="fw-semibold"><%- user ? user.name : 'Guest' %></span>
+        </div>
+      </div>
+
+      <div class="page-content p-4 flex-grow-1">
+        <!-- Flash messages -->
+        <% if(success_msg && success_msg.length > 0) { %>
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+          <i class="fa-solid fa-circle-check me-2"></i><%- success_msg %>
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        <% } %>
+        <% if(error_msg && error_msg.length > 0) { %>
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+          <i class="fa-solid fa-circle-xmark me-2"></i><%- error_msg %>
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        <% } %>
+
+        <%- body %>
+      </div>
+
+      <!-- Footer -->
+      <footer class="app-footer">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+          <div>
+            <i class="fa-solid fa-school me-1 text-warning"></i>
+            <strong><%- schoolName %></strong>
+            <span class="text-muted ms-2">
+              <i class="fa-solid fa-location-dot me-1"></i><%- schoolAddress %>
+            </span>
+          </div>
+          <div class="text-muted small">
+            <i class="fa-solid fa-code me-1"></i>Developed by
+            <strong class="text-primary"><%- developedBy %></strong>
+            &nbsp;&bull;&nbsp; &copy; <%- new Date().getFullYear() %>
+          </div>
+        </div>
+      </footer>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="/js/main.js"></script>
+</body>
+</html>

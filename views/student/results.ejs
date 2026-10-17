@@ -1,0 +1,29 @@
+<div class="d-flex justify-content-between mb-4">
+  <h5 class="fw-bold mb-0"><i class="fa-solid fa-trophy text-primary me-2"></i>My Results</h5>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-dark"><tr><th>Exam</th><th>Date</th><th>Total Obtained</th><th>Max Marks</th><th>Percentage</th><th>View</th></tr></thead>
+      <tbody>
+        <% exams.forEach(e => { %>
+        <% const pct = e.max_marks>0?((e.obtained/e.max_marks)*100).toFixed(1):0; %>
+        <tr>
+          <td><strong><%- e.name %></strong></td>
+          <td><%- e.exam_date ? new Date(e.exam_date).toLocaleDateString('en-IN') : '-' %></td>
+          <td><%- e.obtained||0 %></td>
+          <td><%- e.max_marks||0 %></td>
+          <td>
+            <div class="progress" style="height:20px;min-width:80px">
+              <div class="progress-bar <%- pct>=75?'bg-success':pct>=50?'bg-warning':'bg-danger'%>" style="width:<%- pct %>%"><%- pct %>%</div>
+            </div>
+          </td>
+          <td><a href="/student/results/<%- e.id %>" class="btn btn-sm btn-outline-primary"><i class="fa-solid fa-eye me-1"></i>Details</a></td>
+        </tr>
+        <% }) %>
+        <% if(!exams.length) { %><tr><td colspan="6" class="text-center py-4 text-muted">No results yet</td></tr><% } %>
+      </tbody>
+    </table>
+  </div>
+</div>

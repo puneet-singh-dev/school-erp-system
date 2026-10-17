@@ -1,0 +1,62 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h5 class="fw-bold mb-0"><i class="fa-solid fa-door-open text-warning me-2"></i>Classes & Sections</h5>
+</div>
+
+<div class="row g-4">
+  <!-- Add Class Form -->
+  <div class="col-md-4">
+    <div class="card shadow-sm">
+      <div class="card-header"><h6 class="mb-0 fw-bold"><i class="fa-solid fa-plus me-1"></i>Add New Class</h6></div>
+      <div class="card-body">
+        <form action="/admin/classes/add" method="POST">
+          <div class="mb-3"><label class="form-label">Class Name *</label><input type="text" name="name" class="form-control" placeholder="e.g., Grade 9, Class XI" required></div>
+          <div class="mb-3"><label class="form-label">Section *</label><input type="text" name="section" class="form-control" placeholder="e.g., A, B, Science" required></div>
+          <div class="mb-3">
+            <label class="form-label">Class Teacher</label>
+            <select name="teacher_id" class="form-select">
+              <option value="">-- Select Teacher --</option>
+              <% teachers.forEach(t => { %><option value="<%- t.id %>"><%- t.name %></option><% }) %>
+            </select>
+          </div>
+          <div class="mb-3"><label class="form-label">Academic Year *</label><input type="text" name="academic_year" class="form-control" placeholder="2024-25" value="2024-25" required></div>
+          <button type="submit" class="btn btn-warning w-100"><i class="fa-solid fa-plus me-1"></i>Add Class</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Classes List -->
+  <div class="col-md-8">
+    <div class="card shadow-sm">
+      <div class="card-header"><h6 class="mb-0 fw-bold">All Classes (<%- classes.length %>)</h6></div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-dark"><tr><th>#</th><th>Class</th><th>Section</th><th>Class Teacher</th><th>Students</th><th>Year</th><th>Action</th></tr></thead>
+            <tbody>
+              <% if(classes.length > 0) { %>
+                <% classes.forEach((c, i) => { %>
+                <tr>
+                  <td><%- i+1 %></td>
+                  <td><strong><%- c.name %></strong></td>
+                  <td><span class="badge bg-warning text-dark"><%- c.section %></span></td>
+                  <td><%- c.teacher_name || '<span class="text-muted">Not assigned</span>' %></td>
+                  <td><span class="badge bg-primary"><%- c.student_count %></span></td>
+                  <td><%- c.academic_year %></td>
+                  <td>
+                    <form action="/admin/classes/delete/<%- c.id %>" method="POST" onsubmit="return confirm('Delete class?')">
+                      <button class="btn btn-sm btn-outline-danger"><i class="fa-solid fa-trash"></i></button>
+                    </form>
+                  </td>
+                </tr>
+                <% }) %>
+              <% } else { %>
+                <tr><td colspan="7" class="text-center text-muted py-4">No classes yet</td></tr>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,46 @@
+<div class="d-flex justify-content-between mb-4">
+  <h5 class="fw-bold mb-0"><i class="fa-solid fa-list me-2"></i>Result: <%- exam.name %></h5>
+  <div>
+    <a href="/student/results/<%- exam.id %>/download" target="_blank" class="btn btn-success btn-sm me-2">
+      <i class="fa-solid fa-file-pdf me-1"></i>Download Report Card
+    </a>
+    <a href="/student/results" class="btn btn-outline-secondary btn-sm">Back</a>
+  </div>
+</div>
+
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <div class="row">
+      <div class="col-md-3"><strong>Name:</strong> <%- student.student_name %></div>
+      <div class="col-md-3"><strong>Class:</strong> <%- student.class_name %> - <%- student.section %></div>
+      <div class="col-md-3"><strong>Adm. No:</strong> <%- student.admission_no %></div>
+      <div class="col-md-3"><strong>Exam:</strong> <%- exam.name %></div>
+    </div>
+  </div>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-dark"><tr><th>Subject</th><th>Max Marks</th><th>Marks Obtained</th><th>Grade</th></tr></thead>
+      <tbody>
+        <% let totalObt=0, totalMax=0; %>
+        <% results.forEach(r => { totalObt+=parseFloat(r.marks_obtained); totalMax+=r.max_marks; %>
+        <tr>
+          <td><strong><%- r.subject_name %></strong></td>
+          <td><%- r.max_marks %></td>
+          <td><%- parseFloat(r.marks_obtained).toFixed(1) %></td>
+          <td><span class="badge <%- r.grade==='A+'||r.grade==='A'?'bg-success':r.grade==='B'||r.grade==='C'?'bg-warning text-dark':'bg-danger' %>"><%- r.grade %></span></td>
+        </tr>
+        <% }) %>
+      </tbody>
+      <tfoot class="table-dark">
+        <tr>
+          <th>Total</th><th><%- totalMax %></th>
+          <th><%- totalObt.toFixed(1) %></th>
+          <th><%- totalMax>0?((totalObt/totalMax)*100).toFixed(1):0 %>%</th>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>

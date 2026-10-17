@@ -1,0 +1,53 @@
+<div class="d-flex justify-content-between mb-4">
+  <h5 class="fw-bold mb-0"><i class="fa-solid fa-circle-exclamation text-danger me-2"></i>Pending Fees</h5>
+</div>
+
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <form method="GET" class="row g-3 align-items-end">
+      <div class="col-md-4">
+        <label class="form-label">Select Class</label>
+        <select name="class_id" class="form-select" onchange="this.form.submit()">
+          <option value="">-- Select Class --</option>
+          <% classes.forEach(c => { %><option value="<%- c.id %>" <%- class_id == c.id ? 'selected' : '' %>><%- c.name %> - <%- c.section %></option><% }) %>
+        </select>
+      </div>
+    </form>
+  </div>
+</div>
+
+<% if(pendingFees.length > 0) { %>
+<div class="card shadow-sm">
+  <div class="card-header d-flex justify-content-between">
+    <h6 class="mb-0 fw-bold">Students with Pending Fees</h6>
+    <span class="badge bg-danger"><%- pendingFees.length %> students</span>
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-dark"><tr><th>Name</th><th>Adm. No</th><th>Class</th><th>Total Fees</th><th>Paid</th><th>Balance</th><th>Actions</th></tr></thead>
+      <tbody>
+        <% pendingFees.forEach(f => { %>
+        <tr>
+          <td><strong><%- f.name %></strong></td>
+          <td><%- f.admission_no %></td>
+          <td><%- f.class_name %> - <%- f.section %></td>
+          <td>₹<%- parseFloat(f.total_fees).toLocaleString('en-IN') %></td>
+          <td class="text-success">₹<%- parseFloat(f.paid).toLocaleString('en-IN') %></td>
+          <td><span class="badge bg-danger fs-6">₹<%- parseFloat(f.balance).toLocaleString('en-IN') %></span></td>
+          <td>
+            <a href="/admin/fees/reminder/<%- f.student_id %>" target="_blank" class="btn btn-sm btn-warning">
+              <i class="fa-solid fa-file-pdf me-1"></i>Notice
+            </a>
+            <a href="/admin/fees/collect?class_id=<%- class_id %>&student_id=<%- f.student_id %>" class="btn btn-sm btn-primary">
+              <i class="fa-solid fa-hand-holding-dollar me-1"></i>Collect
+            </a>
+          </td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+</div>
+<% } else if(class_id) { %>
+<div class="alert alert-success"><i class="fa-solid fa-check-circle me-2"></i>All fees are cleared for this class!</div>
+<% } %>

@@ -1,0 +1,33 @@
+<div class="d-flex justify-content-between mb-3"><h5 class="fw-bold mb-0">Enter Results: <%- exam.name %></h5><a href="/teacher/results" class="btn btn-sm btn-outline-secondary">Back</a></div>
+<div class="alert alert-info"><strong>Class:</strong> <%- exam.class_name %> | <strong>Exam:</strong> <%- exam.name %></div>
+<form action="/teacher/results/save/<%- exam.id %>" method="POST">
+  <div class="card shadow-sm">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-bordered align-middle mb-0">
+          <thead class="table-dark">
+            <tr>
+              <th>Student</th>
+              <% subjects.forEach(sub => { %><th><%- sub.name %><br><small>Max: <%- sub.max_marks %></small></th><% }) %>
+            </tr>
+          </thead>
+          <tbody>
+            <% students.forEach(s => { %>
+            <tr>
+              <td><strong><%- s.name %></strong><br><small>Roll: <%- s.roll_number||'-' %></small></td>
+              <% subjects.forEach(sub => { %>
+              <% const r = resultsMap[`${s.id}_${sub.id}`]; %>
+              <td>
+                <input type="number" name="marks[<%- s.id %>_<%- sub.id %>]" class="form-control form-control-sm text-center" value="<%- r?r.marks_obtained:'' %>" min="0" max="<%- sub.max_marks %>" step="0.5">
+                <% if(r) { %><small class="text-success"><%- r.grade %></small><% } %>
+              </td>
+              <% }) %>
+            </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card-footer"><button type="submit" class="btn btn-primary px-4"><i class="fa-solid fa-save me-1"></i>Save Results</button></div>
+  </div>
+</form>

@@ -1,0 +1,40 @@
+<div class="d-flex justify-content-between mb-4">
+  <h5 class="fw-bold mb-0"><i class="fa-solid fa-chart-bar text-primary me-2"></i>Attendance Report</h5>
+</div>
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <form method="GET" class="row g-3 align-items-end">
+      <div class="col-md-4"><label class="form-label">Class</label>
+        <select name="class_id" class="form-select">
+          <option value="">My Classes</option>
+          <% classes.forEach(c => { %><option value="<%- c.id %>" <%- class_id==c.id?'selected':'' %>><%- c.name %> - <%- c.section %></option><% }) %>
+        </select>
+      </div>
+      <div class="col-md-2"><label class="form-label">Month</label><select name="month" class="form-select"><% for(let m=1;m<=12;m++){%><option value="<%- m%>" <%- month==m?'selected':''%>><%- new Date(2000,m-1).toLocaleString('en',{month:'long'}) %></option><%}%></select></div>
+      <div class="col-md-2"><label class="form-label">Year</label><input type="number" name="year" class="form-control" value="<%- year %>"></div>
+      <div class="col-md-2"><button type="submit" class="btn btn-primary w-100">Generate</button></div>
+    </form>
+  </div>
+</div>
+<% if(report.length > 0) { %>
+<div class="card shadow-sm">
+  <div class="card-header"><h6 class="mb-0 fw-bold">Report</h6></div>
+  <div class="card-body p-0">
+    <table class="table table-bordered mb-0">
+      <thead class="table-dark"><tr><th>Roll No</th><th>Name</th><th>Present</th><th>Absent</th><th>Total</th><th>%</th></tr></thead>
+      <tbody>
+        <% report.forEach(r => { %>
+        <% const pct = r.total_days>0?((r.present/r.total_days)*100).toFixed(1):0; %>
+        <tr>
+          <td><%- r.roll_number||'-' %></td><td><%- r.name %></td>
+          <td><span class="badge bg-success"><%- r.present %></span></td>
+          <td><span class="badge bg-danger"><%- r.absent %></span></td>
+          <td><%- r.total_days %></td>
+          <td><div class="progress" style="height:18px"><div class="progress-bar <%- pct>=75?'bg-success':pct>=50?'bg-warning':'bg-danger'%>" style="width:<%- pct %>%"><%- pct %>%</div></div></td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+</div>
+<% } %>

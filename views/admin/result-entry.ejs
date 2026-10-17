@@ -1,0 +1,57 @@
+<div class="d-flex justify-content-between mb-4">
+  <h5 class="fw-bold mb-0"><i class="fa-solid fa-pen me-2"></i>Enter Results: <%- exam.name %></h5>
+  <a href="/admin/results" class="btn btn-outline-secondary btn-sm">Back</a>
+</div>
+
+<div class="alert alert-info">
+  <strong>Class:</strong> <%- exam.class_name %> &nbsp;|&nbsp;
+  <strong>Exam:</strong> <%- exam.name %> &nbsp;|&nbsp;
+  <strong>Date:</strong> <%- exam.exam_date ? new Date(exam.exam_date).toLocaleDateString('en-IN') : 'N/A' %>
+</div>
+
+<form action="/admin/results/save/<%- exam.id %>" method="POST">
+  <div class="card shadow-sm">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-bordered align-middle mb-0">
+          <thead class="table-dark">
+            <tr>
+              <th style="min-width:150px">Student</th>
+              <% subjects.forEach(sub => { %><th style="min-width:120px"><%- sub.name %><br><small>Max: <%- sub.max_marks %></small></th><% }) %>
+              <th>Report Card</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% students.forEach(s => { %>
+            <tr>
+              <td>
+                <div class="fw-semibold"><%- s.name %></div>
+                <small class="text-muted">Roll: <%- s.roll_number || '-' %></small>
+              </td>
+              <% subjects.forEach(sub => { %>
+              <% const existingResult = resultsMap[`${s.id}_${sub.id}`]; %>
+              <td>
+                <input type="number" name="marks[<%- s.id %>_<%- sub.id %>]"
+                  class="form-control form-control-sm text-center"
+                  value="<%- existingResult ? existingResult.marks_obtained : '' %>"
+                  min="0" max="<%- sub.max_marks %>" step="0.5"
+                  placeholder="0-<%- sub.max_marks %>">
+                <% if(existingResult) { %><small class="text-success">Grade: <%- existingResult.grade %></small><% } %>
+              </td>
+              <% }) %>
+              <td>
+                <a href="/admin/results/report-card/<%- s.id %>/<%- exam.id %>" target="_blank" class="btn btn-sm btn-outline-success">
+                  <i class="fa-solid fa-file-pdf me-1"></i>Print
+                </a>
+              </td>
+            </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card-footer">
+      <button type="submit" class="btn btn-primary px-4"><i class="fa-solid fa-save me-1"></i>Save All Results</button>
+    </div>
+  </div>
+</form>

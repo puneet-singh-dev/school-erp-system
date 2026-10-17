@@ -1,0 +1,55 @@
+<div class="d-flex justify-content-between mb-4">
+  <h5 class="fw-bold mb-0"><i class="fa-solid fa-bullhorn text-warning me-2"></i>Notices & Announcements</h5>
+</div>
+
+<div class="row g-4">
+  <div class="col-md-4">
+    <div class="card shadow-sm">
+      <div class="card-header"><h6 class="mb-0 fw-bold">Publish Notice</h6></div>
+      <div class="card-body">
+        <form action="/admin/notices/add" method="POST">
+          <div class="mb-3"><label class="form-label">Title *</label><input type="text" name="title" class="form-control" placeholder="Notice title" required></div>
+          <div class="mb-3"><label class="form-label">Content *</label><textarea name="content" class="form-control" rows="5" placeholder="Write notice content..." required></textarea></div>
+          <div class="mb-3">
+            <label class="form-label">Target Audience</label>
+            <select name="target_role" class="form-select">
+              <option value="all">All</option>
+              <option value="student">Students Only</option>
+              <option value="teacher">Teachers Only</option>
+            </select>
+          </div>
+          <button type="submit" class="btn btn-warning w-100"><i class="fa-solid fa-paper-plane me-1"></i>Publish</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-8">
+    <div class="card shadow-sm">
+      <div class="card-header"><h6 class="mb-0 fw-bold">All Notices</h6></div>
+      <div class="card-body">
+        <% if(notices.length > 0) { %>
+          <% notices.forEach(n => { %>
+          <div class="notice-card mb-3">
+            <div class="d-flex justify-content-between align-items-start">
+              <div>
+                <h6 class="fw-bold mb-1"><%- n.title %></h6>
+                <p class="text-muted mb-1"><%- n.content %></p>
+                <small class="text-muted"><i class="fa-solid fa-calendar me-1"></i><%- new Date(n.created_at).toLocaleDateString('en-IN') %>
+                  &nbsp;<span class="badge bg-secondary"><%- n.target_role %></span>
+                  <% if(n.created_by_name) { %>&nbsp;By: <%- n.created_by_name %><% } %>
+                </small>
+              </div>
+              <form action="/admin/notices/delete/<%- n.id %>" method="POST" class="ms-2" onsubmit="return confirm('Delete?')">
+                <button class="btn btn-sm btn-outline-danger"><i class="fa-solid fa-trash"></i></button>
+              </form>
+            </div>
+          </div>
+          <% }) %>
+        <% } else { %>
+          <p class="text-center text-muted py-4">No notices published</p>
+        <% } %>
+      </div>
+    </div>
+  </div>
+</div>

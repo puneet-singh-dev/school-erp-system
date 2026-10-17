@@ -1,0 +1,74 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h5 class="fw-bold mb-0"><i class="fa-solid fa-user-graduate text-primary me-2"></i>Students Management</h5>
+  <a href="/admin/students/add" class="btn btn-primary"><i class="fa-solid fa-plus me-2"></i>Add Student</a>
+</div>
+
+<!-- Filters -->
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <form method="GET" class="row g-3 align-items-end">
+      <div class="col-md-5">
+        <label class="form-label">Search</label>
+        <input type="text" name="search" class="form-control" placeholder="Name, Admission No, Email..." value="<%- search %>">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Filter by Class</label>
+        <select name="class_id" class="form-select">
+          <option value="">All Classes</option>
+          <% classes.forEach(c => { %>
+          <option value="<%- c.id %>" <%- classFilter == c.id ? 'selected' : '' %>><%- c.name %> - <%- c.section %></option>
+          <% }) %>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <button type="submit" class="btn btn-primary w-100"><i class="fa-solid fa-search me-1"></i>Filter</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-dark">
+          <tr>
+            <th>#</th><th>Name</th><th>Adm. No</th><th>Class</th><th>Guardian</th><th>Phone</th><th>Status</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if(students.length > 0) { %>
+            <% students.forEach((s, i) => { %>
+            <tr>
+              <td><%- i+1 %></td>
+              <td>
+                <div class="d-flex align-items-center gap-2">
+                  <div class="avatar-circle"><%- s.name.charAt(0) %></div>
+                  <div><div class="fw-semibold"><%- s.name %></div><small class="text-muted"><%- s.email %></small></div>
+                </div>
+              </td>
+              <td><span class="badge bg-secondary"><%- s.admission_no %></span></td>
+              <td><%- s.class_name ? s.class_name + ' - ' + s.section : '<span class="text-muted">Not assigned</span>' %></td>
+              <td><%- s.guardian_name || '-' %></td>
+              <td><%- s.phone || '-' %></td>
+              <td><span class="badge <%- s.is_active ? 'bg-success' : 'bg-danger' %>"><%- s.is_active ? 'Active' : 'Inactive' %></span></td>
+              <td>
+                <div class="btn-group btn-group-sm">
+                  <a href="/admin/students/edit/<%- s.id %>" class="btn btn-outline-primary" title="Edit"><i class="fa-solid fa-pen"></i></a>
+                  <a href="/admin/fees/reminder/<%- s.id %>" target="_blank" class="btn btn-outline-warning" title="Fee Reminder"><i class="fa-solid fa-bell"></i></a>
+                  <form action="/admin/students/delete/<%- s.id %>" method="POST" onsubmit="return confirm('Delete this student?')">
+                    <button type="submit" class="btn btn-outline-danger" title="Delete"><i class="fa-solid fa-trash"></i></button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            <% }) %>
+          <% } else { %>
+            <tr><td colspan="8" class="text-center text-muted py-5"><i class="fa-solid fa-inbox fa-2x mb-2 d-block"></i>No students found</td></tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+    <div class="card-footer text-muted">Total: <strong><%- students.length %></strong> students</div>
+  </div>
+</div>

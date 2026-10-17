@@ -1,0 +1,60 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h5 class="fw-bold mb-0"><i class="fa-solid fa-book text-primary me-2"></i>Subjects Management</h5>
+</div>
+
+<div class="row g-4">
+  <div class="col-md-4">
+    <div class="card shadow-sm">
+      <div class="card-header"><h6 class="mb-0 fw-bold">Add Subject</h6></div>
+      <div class="card-body">
+        <form action="/admin/subjects/add" method="POST">
+          <div class="mb-3"><label class="form-label">Subject Name *</label><input type="text" name="name" class="form-control" placeholder="Mathematics" required></div>
+          <div class="mb-3"><label class="form-label">Subject Code</label><input type="text" name="code" class="form-control" placeholder="MATH001"></div>
+          <div class="mb-3">
+            <label class="form-label">Class *</label>
+            <select name="class_id" class="form-select" required>
+              <option value="">Select Class</option>
+              <% classes.forEach(c => { %><option value="<%- c.id %>"><%- c.name %> - <%- c.section %></option><% }) %>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Subject Teacher</label>
+            <select name="teacher_id" class="form-select">
+              <option value="">Select Teacher</option>
+              <% teachers.forEach(t => { %><option value="<%- t.id %>"><%- t.name %></option><% }) %>
+            </select>
+          </div>
+          <div class="mb-3"><label class="form-label">Max Marks</label><input type="number" name="max_marks" class="form-control" value="100"></div>
+          <button type="submit" class="btn btn-primary w-100">Add Subject</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-8">
+    <div class="card shadow-sm">
+      <div class="card-header"><h6 class="mb-0 fw-bold">All Subjects (<%- subjects.length %>)</h6></div>
+      <div class="card-body p-0">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-dark"><tr><th>Subject</th><th>Code</th><th>Class</th><th>Teacher</th><th>Max Marks</th><th>Action</th></tr></thead>
+          <tbody>
+            <% subjects.forEach(s => { %>
+            <tr>
+              <td><strong><%- s.name %></strong></td>
+              <td><code><%- s.code || '-' %></code></td>
+              <td><%- s.class_name %> - <%- s.section %></td>
+              <td><%- s.teacher_name || '-' %></td>
+              <td><%- s.max_marks %></td>
+              <td>
+                <form action="/admin/subjects/delete/<%- s.id %>" method="POST" onsubmit="return confirm('Delete subject?')">
+                  <button class="btn btn-sm btn-outline-danger"><i class="fa-solid fa-trash"></i></button>
+                </form>
+              </td>
+            </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>

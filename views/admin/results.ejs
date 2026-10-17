@@ -1,0 +1,58 @@
+<div class="d-flex justify-content-between mb-4">
+  <h5 class="fw-bold mb-0"><i class="fa-solid fa-file-pen text-primary me-2"></i>Results & Exams</h5>
+</div>
+
+<div class="row g-4">
+  <!-- Add Exam -->
+  <div class="col-md-4">
+    <div class="card shadow-sm">
+      <div class="card-header"><h6 class="mb-0 fw-bold">Create Exam</h6></div>
+      <div class="card-body">
+        <form action="/admin/exams/add" method="POST">
+          <div class="mb-3"><label class="form-label">Exam Name *</label><input type="text" name="name" class="form-control" placeholder="Unit Test 1, Mid Term..." required></div>
+          <div class="mb-3">
+            <label class="form-label">Class *</label>
+            <select name="class_id" class="form-select" required>
+              <option value="">Select Class</option>
+              <% classes.forEach(c => { %><option value="<%- c.id %>"><%- c.name %> - <%- c.section %></option><% }) %>
+            </select>
+          </div>
+          <div class="mb-3"><label class="form-label">Exam Date</label><input type="date" name="exam_date" class="form-control"></div>
+          <div class="mb-3"><label class="form-label">Academic Year</label><input type="text" name="academic_year" class="form-control" value="2024-25"></div>
+          <button type="submit" class="btn btn-primary w-100">Create Exam</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Exams List -->
+  <div class="col-md-8">
+    <div class="card shadow-sm">
+      <div class="card-header"><h6 class="mb-0 fw-bold">All Exams</h6></div>
+      <div class="card-body p-0">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-dark"><tr><th>Exam Name</th><th>Class</th><th>Date</th><th>Year</th><th>Actions</th></tr></thead>
+          <tbody>
+            <% if(exams.length > 0) { %>
+              <% exams.forEach(e => { %>
+              <tr>
+                <td><strong><%- e.name %></strong></td>
+                <td><%- e.class_name %></td>
+                <td><%- e.exam_date ? new Date(e.exam_date).toLocaleDateString('en-IN') : '-' %></td>
+                <td><%- e.academic_year %></td>
+                <td>
+                  <a href="/admin/results/enter/<%- e.id %>" class="btn btn-sm btn-primary">
+                    <i class="fa-solid fa-pen me-1"></i>Enter Marks
+                  </a>
+                </td>
+              </tr>
+              <% }) %>
+            <% } else { %>
+              <tr><td colspan="5" class="text-center py-4 text-muted">No exams yet</td></tr>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
