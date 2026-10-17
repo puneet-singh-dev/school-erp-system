@@ -11,6 +11,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Uploads
+public/uploads/*
+!public/uploads/.gitkeep
+
 # OS / Editor files
 .DS_Store
 Thumbs.db

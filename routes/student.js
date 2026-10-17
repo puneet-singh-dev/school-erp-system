@@ -95,8 +95,36 @@ router.get('/fees', async (req, res) => {
 });
 
 // Download fee receipt
+const { generateFeeReceiptPDF } = require('../utils/receiptPdf');
+
 router.get('/fees/receipt/:paymentId', async (req, res) => {
-  res.redirect(`/admin/fees/receipt/${req.params.paymentId}`);
+  try {
+    const [students] = await db.query('SELECT * FROM students WHERE user_id=?', [req.session.user.id]);
+    if (!students.length) return res.status(404).send('Student not found');
+    const student = students[0];
+
+    const query = `
+      SELECT fp.*, fs.fee_type, fs.amount as total_amount, 
+             u.name as student_name, s.admission_no, s.mother_name, s.father_name, s.guardian_name,
+             c.name as class_name, c.section, c.academic_year,
+             admin_u.name as collector_name,
+             (SELECT COALESCE(SUM(amount_paid),0) FROM fee_payments WHERE student_id=fp.student_id AND fee_structure_id=fp.fee_structure_id) as cumulative_paid
+      FROM fee_payments fp 
+      JOIN fee_structure fs ON fp.fee_structure_id=fs.id 
+      JOIN students s ON fp.student_id=s.id 
+      JOIN users u ON s.user_id=u.id 
+      LEFT JOIN classes c ON s.class_id=c.id 
+      LEFT JOIN users admin_u ON fp.collected_by=admin_u.id 
+      WHERE fp.id=? AND fp.student_id=?`;
+
+    const [rows] = await db.query(query, [req.params.paymentId, student.id]);
+    if (!rows.length) return res.status(404).send('Receipt not found');
+
+    generateFeeReceiptPDF(res, rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Error generating receipt');
+  }
 });
 
 module.exports = router;

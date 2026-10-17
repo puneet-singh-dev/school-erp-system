@@ -5,7 +5,30 @@
 
 <div class="card shadow-sm">
   <div class="card-body">
-    <form action="<%- student ? '/admin/students/edit/' + student.id : '/admin/students/add' %>" method="POST">
+    <form action="<%- student ? '/admin/students/edit/' + student.id : '/admin/students/add' %>" method="POST" enctype="multipart/form-data">
+      
+      <!-- Student Photo & Identification -->
+      <h6 class="fw-bold text-primary mb-3"><i class="fa-solid fa-camera me-1"></i> Profile Photo</h6>
+      <div class="row g-3 mb-4">
+        <div class="col-md-12">
+          <div class="d-flex align-items-center gap-4 p-3 bg-light rounded border">
+            <div class="position-relative">
+              <img id="photoPreview" 
+                   src="<%- student && student.profile_photo && student.profile_photo !== 'default.png' ? '/uploads/students/' + student.profile_photo : 'https://ui-avatars.com/api/?name=' + encodeURIComponent(student ? student.name : 'Student') + '&size=128&background=0D8ABC&color=fff' %>" 
+                   alt="Profile Photo" 
+                   class="rounded-circle border border-3 border-white shadow-sm" 
+                   style="width: 90px; height: 90px; object-fit: cover;">
+            </div>
+            <div class="flex-grow-1" style="max-width: 420px;">
+              <label class="form-label fw-semibold mb-1">Upload Student Photo</label>
+              <input type="file" name="profile_photo" id="photoInput" class="form-control" accept="image/*" onchange="previewPhoto(this)">
+              <small class="text-muted">Accepted formats: JPG, PNG, WEBP (Max: 5MB)</small>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Personal Information -->
       <h6 class="fw-bold text-primary mb-3"><i class="fa-solid fa-user me-1"></i> Personal Information</h6>
       <div class="row g-3 mb-4">
         <div class="col-md-4">
@@ -18,7 +41,7 @@
         </div>
         <div class="col-md-4">
           <label class="form-label">Phone</label>
-          <input type="text" name="phone" class="form-control" value="<%- student ? student.phone : '' %>">
+          <input type="text" name="phone" class="form-control" value="<%- student ? student.phone : '' %>" placeholder="10-digit mobile number">
         </div>
         <% if(!student) { %>
         <div class="col-md-4">
@@ -33,18 +56,41 @@
         <div class="col-md-4">
           <label class="form-label">Gender</label>
           <select name="gender" class="form-select">
-            <option value="">Select</option>
+            <option value="">Select Gender</option>
             <% ['Male','Female','Other'].forEach(g => { %>
             <option <%- student && student.gender === g ? 'selected' : '' %>><%- g %></option>
             <% }) %>
           </select>
         </div>
+        <div class="col-md-4">
+          <label class="form-label">Blood Group</label>
+          <select name="blood_group" class="form-select">
+            <option value="">Select Blood Group</option>
+            <% ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'].forEach(bg => { %>
+            <option value="<%- bg %>" <%- student && student.blood_group === bg ? 'selected' : '' %>><%- bg %></option>
+            <% }) %>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Category</label>
+          <select name="category" class="form-select">
+            <option value="">Select Category</option>
+            <% ['General', 'OBC', 'SC', 'ST', 'EWS'].forEach(cat => { %>
+            <option value="<%- cat %>" <%- student && student.category === cat ? 'selected' : '' %>><%- cat %></option>
+            <% }) %>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Aadhaar Number</label>
+          <input type="text" name="aadhaar_no" class="form-control" value="<%- student && student.aadhaar_no ? student.aadhaar_no : '' %>" placeholder="12-digit UIDAI number" maxlength="16">
+        </div>
         <div class="col-md-12">
-          <label class="form-label">Address</label>
-          <textarea name="address" class="form-control" rows="2"><%- student ? student.address : '' %></textarea>
+          <label class="form-label">Residential Address</label>
+          <textarea name="address" class="form-control" rows="2" placeholder="Full residential address"><%- student ? student.address : '' %></textarea>
         </div>
       </div>
 
+      <!-- Academic Information -->
       <h6 class="fw-bold text-primary mb-3"><i class="fa-solid fa-school me-1"></i> Academic Information</h6>
       <div class="row g-3 mb-4">
         <div class="col-md-4">
@@ -88,15 +134,24 @@
         </div>
       </div>
 
-      <h6 class="fw-bold text-primary mb-3"><i class="fa-solid fa-people-roof me-1"></i> Guardian Information</h6>
+      <!-- Parents & Guardian Information -->
+      <h6 class="fw-bold text-primary mb-3"><i class="fa-solid fa-people-roof me-1"></i> Parents & Guardian Information</h6>
       <div class="row g-3 mb-4">
         <div class="col-md-6">
-          <label class="form-label">Guardian Name</label>
-          <input type="text" name="guardian_name" class="form-control" value="<%- student ? student.guardian_name : '' %>">
+          <label class="form-label">Father's Name *</label>
+          <input type="text" name="father_name" class="form-control" value="<%- student ? (student.father_name || student.guardian_name || '') : '' %>" placeholder="Father's full name" required>
         </div>
         <div class="col-md-6">
-          <label class="form-label">Guardian Phone</label>
-          <input type="text" name="guardian_phone" class="form-control" value="<%- student ? student.guardian_phone : '' %>">
+          <label class="form-label">Mother's Name *</label>
+          <input type="text" name="mother_name" class="form-control" value="<%- student ? (student.mother_name || '') : '' %>" placeholder="Mother's full name" required>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Guardian Phone / WhatsApp</label>
+          <input type="text" name="guardian_phone" class="form-control" value="<%- student ? (student.guardian_phone || '') : '' %>" placeholder="Primary contact for SMS & calls">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Emergency Contact Number</label>
+          <input type="text" name="emergency_contact" class="form-control" value="<%- student && student.emergency_contact ? student.emergency_contact : '' %>" placeholder="Alternative emergency phone">
         </div>
       </div>
 
@@ -110,8 +165,18 @@
   </div>
 </div>
 
-<% if(!student) { %>
 <script>
+function previewPhoto(input) {
+  if (input.files && input.files[0]) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      document.getElementById('photoPreview').src = e.target.result;
+    };
+    reader.readAsDataURL(input.files[0]);
+  }
+}
+
+<% if(!student) { %>
 async function previewAdmNo() {
   const r = await fetch('/admin/api/next-ids');
   const d = await r.json();
@@ -126,10 +191,9 @@ async function previewRoll(classId) {
     document.getElementById('rollNo').placeholder = 'Next: ' + d.roll_number;
   }
 }
-// Auto-preview on load if class already selected
 window.addEventListener('load', () => {
   const sel = document.getElementById('classSelect');
-  if (sel.value) previewRoll(sel.value);
+  if (sel && sel.value) previewRoll(sel.value);
 });
-</script>
 <% } %>
+</script>

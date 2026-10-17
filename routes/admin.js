@@ -5,6 +5,37 @@ const db = require('../config/db');
 const { isAdmin } = require('../middleware/auth');
 const PDFDocument = require('pdfkit');
 const moment = require('moment');
+const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
+const { generateFeeReceiptPDF } = require('../utils/receiptPdf');
+
+// Configure Multer for student profile photo uploads
+const uploadDir = path.join(__dirname, '../public/uploads/students');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadDir),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, `student-${unique}${ext}`);
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files (JPG, PNG, WEBP) are allowed!'));
+    }
+  }
+});
 
 router.use(isAdmin);
 
@@ -81,7 +112,7 @@ router.get('/students', async (req, res) => {
   const search = req.query.search || '';
   const classFilter = req.query.class_id || '';
   try {
-    let query = `SELECT s.*, u.name, u.email, u.phone, u.is_active, c.name as class_name, c.section
+    let query = `SELECT s.*, u.name, u.email, u.phone, u.profile_photo, u.is_active, c.name as class_name, c.section
       FROM students s JOIN users u ON s.user_id=u.id LEFT JOIN classes c ON s.class_id=c.id
       WHERE 1=1`;
     const params = [];
@@ -101,8 +132,13 @@ router.get('/students/add', async (req, res) => {
   res.render('admin/student-form', { title: 'Add Student', student: null, classes });
 });
 
-router.post('/students/add', async (req, res) => {
-  let { name, email, phone, password, address, admission_no, class_id, roll_number, date_of_birth, gender, guardian_name, guardian_phone, admission_date } = req.body;
+router.post('/students/add', upload.single('profile_photo'), async (req, res) => {
+  let {
+    name, email, phone, password, address, admission_no, class_id, roll_number,
+    date_of_birth, gender, father_name, mother_name, guardian_name, guardian_phone,
+    emergency_contact, blood_group, category, aadhaar_no, admission_date
+  } = req.body;
+
   try {
     // Auto-generate admission_no if blank
     if (!admission_no || admission_no.trim() === '') {
@@ -111,15 +147,34 @@ router.post('/students/add', async (req, res) => {
       admission_no = `ADM${year}${String(lastId + 1).padStart(4, '0')}`;
     }
     // Auto-generate roll_number if blank
-    if ((!roll_number || roll_number.trim() === '') && class_id) {
+    if ((!roll_number || roll_number.toString().trim() === '') && class_id) {
       const [[{ maxRoll }]] = await db.query('SELECT COALESCE(MAX(roll_number),0) as maxRoll FROM students WHERE class_id=?', [class_id]);
       roll_number = maxRoll + 1;
     }
+
+    const profilePhoto = req.file ? req.file.filename : 'default.png';
     const hashed = await bcrypt.hash(password || 'student123', 10);
-    const [userResult] = await db.query('INSERT INTO users (name,email,password,role,phone,address) VALUES (?,?,?,?,?,?)',
-      [name, email, hashed, 'student', phone, address]);
-    await db.query('INSERT INTO students (user_id,admission_no,class_id,roll_number,date_of_birth,gender,guardian_name,guardian_phone,admission_date) VALUES (?,?,?,?,?,?,?,?,?)',
-      [userResult.insertId, admission_no, class_id || null, roll_number || null, date_of_birth || null, gender, guardian_name, guardian_phone, admission_date || new Date().toISOString().split('T')[0]]);
+    const [userResult] = await db.query(
+      'INSERT INTO users (name,email,password,role,phone,address,profile_photo) VALUES (?,?,?,?,?,?,?)',
+      [name, email, hashed, 'student', phone || null, address || null, profilePhoto]
+    );
+
+    await db.query(
+      `INSERT INTO students 
+       (user_id, admission_no, class_id, roll_number, date_of_birth, gender, 
+        father_name, mother_name, guardian_name, guardian_phone, emergency_contact, 
+        blood_group, category, aadhaar_no, admission_date) 
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [
+        userResult.insertId, admission_no, class_id || null, roll_number || null,
+        date_of_birth || null, gender || null,
+        father_name || guardian_name || null, mother_name || null,
+        guardian_name || father_name || null, guardian_phone || null, emergency_contact || null,
+        blood_group || null, category || null, aadhaar_no || null,
+        admission_date || new Date().toISOString().split('T')[0]
+      ]
+    );
+
     req.flash('success_msg', `Student added! Admission No: ${admission_no}, Roll No: ${roll_number || 'N/A'}`);
     res.redirect('/admin/students');
   } catch (err) {
@@ -131,23 +186,58 @@ router.post('/students/add', async (req, res) => {
 
 router.get('/students/edit/:id', async (req, res) => {
   try {
-    const [rows] = await db.query(`SELECT s.*, u.name, u.email, u.phone, u.address FROM students s JOIN users u ON s.user_id=u.id WHERE s.id=?`, [req.params.id]);
+    const [rows] = await db.query(`SELECT s.*, u.name, u.email, u.phone, u.address, u.profile_photo FROM students s JOIN users u ON s.user_id=u.id WHERE s.id=?`, [req.params.id]);
     const [classes] = await db.query('SELECT * FROM classes ORDER BY name, section');
     if (!rows.length) { req.flash('error_msg', 'Student not found'); return res.redirect('/admin/students'); }
     res.render('admin/student-form', { title: 'Edit Student', student: rows[0], classes });
   } catch (err) { console.error(err); res.redirect('/admin/students'); }
 });
 
-router.post('/students/edit/:id', async (req, res) => {
-  const { name, email, phone, address, class_id, roll_number, date_of_birth, gender, guardian_name, guardian_phone } = req.body;
+router.post('/students/edit/:id', upload.single('profile_photo'), async (req, res) => {
+  const {
+    name, email, phone, address, class_id, roll_number, date_of_birth, gender,
+    father_name, mother_name, guardian_name, guardian_phone, emergency_contact,
+    blood_group, category, aadhaar_no
+  } = req.body;
+
   try {
     const [students] = await db.query('SELECT user_id FROM students WHERE id=?', [req.params.id]);
-    await db.query('UPDATE users SET name=?,email=?,phone=?,address=? WHERE id=?', [name, email, phone, address, students[0].user_id]);
-    await db.query('UPDATE students SET class_id=?,roll_number=?,date_of_birth=?,gender=?,guardian_name=?,guardian_phone=? WHERE id=?',
-      [class_id || null, roll_number || null, date_of_birth || null, gender, guardian_name, guardian_phone, req.params.id]);
+    if (!students.length) {
+      req.flash('error_msg', 'Student not found');
+      return res.redirect('/admin/students');
+    }
+
+    const userId = students[0].user_id;
+    if (req.file) {
+      await db.query('UPDATE users SET name=?,email=?,phone=?,address=?,profile_photo=? WHERE id=?',
+        [name, email, phone, address, req.file.filename, userId]);
+    } else {
+      await db.query('UPDATE users SET name=?,email=?,phone=?,address=? WHERE id=?',
+        [name, email, phone, address, userId]);
+    }
+
+    await db.query(
+      `UPDATE students SET 
+        class_id=?, roll_number=?, date_of_birth=?, gender=?, 
+        father_name=?, mother_name=?, guardian_name=?, guardian_phone=?, 
+        emergency_contact=?, blood_group=?, category=?, aadhaar_no=? 
+       WHERE id=?`,
+      [
+        class_id || null, roll_number || null, date_of_birth || null, gender || null,
+        father_name || guardian_name || null, mother_name || null,
+        guardian_name || father_name || null, guardian_phone || null,
+        emergency_contact || null, blood_group || null, category || null, aadhaar_no || null,
+        req.params.id
+      ]
+    );
+
     req.flash('success_msg', 'Student updated successfully');
     res.redirect('/admin/students');
-  } catch (err) { console.error(err); req.flash('error_msg', 'Error updating student'); res.redirect('/admin/students'); }
+  } catch (err) {
+    console.error(err);
+    req.flash('error_msg', 'Error updating student: ' + err.message);
+    res.redirect('/admin/students');
+  }
 });
 
 router.post('/students/delete/:id', async (req, res) => {
@@ -355,34 +445,38 @@ router.post('/fees/collect', async (req, res) => {
 });
 
 // Fee Receipt PDF
+// Fee Receipt PDF (A4 split: Left=Student Copy, Right=College Copy, Half=Next Student)
 router.get('/fees/receipt/:id', async (req, res) => {
   try {
-    const [rows] = await db.query(`SELECT fp.*, fs.fee_type, fs.amount as total_amount, u.name as student_name, s.admission_no, c.name as class_name, c.section
-      FROM fee_payments fp JOIN fee_structure fs ON fp.fee_structure_id=fs.id JOIN students s ON fp.student_id=s.id JOIN users u ON s.user_id=u.id LEFT JOIN classes c ON s.class_id=c.id WHERE fp.id=?`, [req.params.id]);
+    const query = `
+      SELECT fp.*, fs.fee_type, fs.amount as total_amount, 
+             u.name as student_name, s.admission_no, s.mother_name, s.father_name, s.guardian_name,
+             c.name as class_name, c.section, c.academic_year,
+             admin_u.name as collector_name,
+             (SELECT COALESCE(SUM(amount_paid),0) FROM fee_payments WHERE student_id=fp.student_id AND fee_structure_id=fp.fee_structure_id) as cumulative_paid
+      FROM fee_payments fp 
+      JOIN fee_structure fs ON fp.fee_structure_id=fs.id 
+      JOIN students s ON fp.student_id=s.id 
+      JOIN users u ON s.user_id=u.id 
+      LEFT JOIN classes c ON s.class_id=c.id 
+      LEFT JOIN users admin_u ON fp.collected_by=admin_u.id 
+      WHERE fp.id=?`;
+
+    const [rows] = await db.query(query, [req.params.id]);
     if (!rows.length) return res.status(404).send('Receipt not found');
-    const p = rows[0];
-    const doc = new PDFDocument({ size: 'A5', margin: 40 });
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename=receipt_${p.receipt_no}.pdf`);
-    doc.pipe(res);
-    doc.fontSize(18).font('Helvetica-Bold').text('SCHOOL ERP', { align: 'center' });
-    doc.fontSize(12).font('Helvetica').text('Fee Payment Receipt', { align: 'center' });
-    doc.moveDown().moveTo(40, doc.y).lineTo(400, doc.y).stroke();
-    doc.moveDown(0.5);
-    const line = (label, val) => { doc.font('Helvetica-Bold').text(label + ': ', { continued: true }).font('Helvetica').text(val || '-'); };
-    line('Receipt No', p.receipt_no);
-    line('Date', moment(p.payment_date).format('DD-MM-YYYY'));
-    line('Student Name', p.student_name);
-    line('Admission No', p.admission_no);
-    line('Class', `${p.class_name} - ${p.section}`);
-    line('Fee Type', p.fee_type);
-    line('Amount Paid', '₹ ' + parseFloat(p.amount_paid).toFixed(2));
-    line('Payment Mode', p.payment_mode);
-    if (p.remarks) line('Remarks', p.remarks);
-    doc.moveDown().moveTo(40, doc.y).lineTo(400, doc.y).stroke().moveDown();
-    doc.font('Helvetica-Oblique').fontSize(10).text('This is a computer generated receipt.', { align: 'center' });
-    doc.end();
-  } catch (err) { console.error(err); res.status(500).send('Error generating receipt'); }
+    const p1 = rows[0];
+
+    let p2 = null;
+    if (req.query.second_id) {
+      const [secondRows] = await db.query(query, [req.query.second_id]);
+      if (secondRows.length) p2 = secondRows[0];
+    }
+
+    generateFeeReceiptPDF(res, p1, p2);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Error generating receipt: ' + err.message);
+  }
 });
 
 // Fee Reminder Notice PDF

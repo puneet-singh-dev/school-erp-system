@@ -85,7 +85,11 @@
                 <td><%- p.fee_type %></td>
                 <td><strong>₹<%- parseFloat(p.amount_paid).toLocaleString('en-IN') %></strong></td>
                 <td><span class="badge bg-light text-dark"><%- p.payment_mode %></span></td>
-                <td><a href="/admin/fees/receipt/<%- p.id %>" target="_blank" class="btn btn-xs btn-outline-primary btn-sm"><i class="fa-solid fa-download"></i></a></td>
+                <td>
+                  <a href="/admin/fees/receipt/<%- p.id %>" target="_blank" class="btn btn-sm btn-outline-primary" title="Print Receipt (Student Copy & College Copy)">
+                    <i class="fa-solid fa-print me-1"></i>Print
+                  </a>
+                </td>
               </tr>
               <% }) %>
             <% } else { %>
