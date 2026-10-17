@@ -89,7 +89,7 @@ router.get('/fees', async (req, res) => {
   if (!students.length) return res.redirect('/student');
   const student = students[0];
   const [feeStructures] = await db.query('SELECT * FROM fee_structure WHERE class_id=? ORDER BY fee_type', [student.class_id]);
-  const [payments] = await db.query(`SELECT fp.*, fs.fee_type, fs.amount as total_amount FROM fee_payments fp JOIN fee_structure fs ON fp.fee_structure_id=fs.id WHERE fp.student_id=? ORDER BY fp.payment_date DESC`, [student.id]);
+  const [payments] = await db.query(`SELECT fp.*, fs.fee_type, fs.amount as total_amount FROM fee_payments fp LEFT JOIN fee_structure fs ON fp.fee_structure_id=fs.id WHERE fp.student_id=? ORDER BY fp.payment_date DESC, fp.id DESC`, [student.id]);
   const [[summary]] = await db.query(`SELECT COALESCE(SUM(fs.amount),0) as total_fees, COALESCE(SUM(fp.amount_paid),0) as paid FROM fee_structure fs LEFT JOIN fee_payments fp ON fs.id=fp.fee_structure_id AND fp.student_id=? WHERE fs.class_id=?`, [student.id, student.class_id]);
   res.render('student/fees', { title: 'My Fees', student, feeStructures, payments, summary });
 });
@@ -108,9 +108,9 @@ router.get('/fees/receipt/:paymentId', async (req, res) => {
              u.name as student_name, s.admission_no, s.mother_name, s.father_name, s.guardian_name,
              c.name as class_name, c.section, c.academic_year,
              admin_u.name as collector_name,
-             (SELECT COALESCE(SUM(amount_paid),0) FROM fee_payments WHERE student_id=fp.student_id AND fee_structure_id=fp.fee_structure_id) as cumulative_paid
+             (SELECT COALESCE(SUM(amount_paid),0) FROM fee_payments WHERE student_id=fp.student_id AND (fee_structure_id=fp.fee_structure_id OR fp.fee_structure_id IS NULL)) as cumulative_paid
       FROM fee_payments fp 
-      JOIN fee_structure fs ON fp.fee_structure_id=fs.id 
+      LEFT JOIN fee_structure fs ON fp.fee_structure_id=fs.id 
       JOIN students s ON fp.student_id=s.id 
       JOIN users u ON s.user_id=u.id 
       LEFT JOIN classes c ON s.class_id=c.id 

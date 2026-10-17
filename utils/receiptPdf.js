@@ -112,69 +112,104 @@ function drawReceiptVoucher(doc, p, x, y, w, h, copyType) {
      .font('Helvetica').text(p.mother_name || '-');
 
   // Row 4: Fee For
+  const feeForText = p.months_paid || p.fee_type || 'Tuition Fee';
   doc.font('Helvetica-Bold').fontSize(6.5).text('Fee For: ', x + 7, infoY + 33, { continued: true })
-     .font('Helvetica').text(p.fee_type || 'Tuition Fee');
+     .font('Helvetica').text(feeForText);
 
   // 5. Particulars Table Grid
-  const tableY = y + 132;
+  const tableY = y + 130;
   const colSrW = 20;
   const colPartW = 180;
   const colAmtW = w - 8 - colSrW - colPartW; // ~68 pt
-  const rowH = 13;
+  const rowH = 12.5;
+
+  // Parse breakdown JSON if available
+  let feeItems = [];
+  if (p.breakdown_json) {
+    try {
+      const parsed = typeof p.breakdown_json === 'string' ? JSON.parse(p.breakdown_json) : p.breakdown_json;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        feeItems = parsed.map(item => ({
+          name: (item.name || '').toUpperCase(),
+          amount: (item.amount !== undefined && item.amount !== null && item.amount !== '') ? parseFloat(item.amount) : null
+        }));
+      }
+    } catch (e) {}
+  }
+
+  // Fallback to primary fee type if no breakdown stored
+  if (feeItems.length === 0) {
+    feeItems.push({
+      name: (p.fee_type || 'TUITION FEES').toUpperCase(),
+      amount: parseFloat(p.amount_paid)
+    });
+  }
+
+  // Display at least 3 rows to maintain professional voucher proportions
+  while (feeItems.length < 3) {
+    feeItems.push({ name: '', amount: null });
+  }
+
+  // Display up to 5 items to fit comfortably in the half-page voucher
+  const displayItems = feeItems.slice(0, 5);
+  const numItemRows = displayItems.length;
+  const totalGridRows = numItemRows + 3; // + Total Amount, Received Amt, Balance
+  const tableBottomY = tableY + rowH * (totalGridRows + 1); // +1 for header
 
   // Table Header
   doc.rect(x + 4, tableY, w - 8, rowH).fillAndStroke('#f0f0f0', '#000000');
   doc.fillColor('#000000').font('Helvetica-Bold').fontSize(6.5);
-  doc.text('Sr.', x + 4, tableY + 3, { width: colSrW, align: 'center' });
-  doc.text('Particulars', x + 4 + colSrW + 4, tableY + 3, { width: colPartW - 6, align: 'left' });
-  doc.text('Amount (₹)', x + 4 + colSrW + colPartW, tableY + 3, { width: colAmtW - 5, align: 'right' });
+  doc.text('Sr.', x + 4, tableY + 2.5, { width: colSrW, align: 'center' });
+  doc.text('Particulars', x + 4 + colSrW + 4, tableY + 2.5, { width: colPartW - 6, align: 'left' });
+  doc.text('Amount (₹)', x + 4 + colSrW + colPartW, tableY + 2.5, { width: colAmtW - 5, align: 'right' });
 
   // Vertical column dividers
-  const tableBottomY = tableY + rowH * 7; // 7 rows total
   doc.moveTo(x + 4 + colSrW, tableY).lineTo(x + 4 + colSrW, tableBottomY).stroke('#000000');
   doc.moveTo(x + 4 + colSrW + colPartW, tableY).lineTo(x + 4 + colSrW + colPartW, tableBottomY).stroke('#000000');
 
-  // Data rows (Fee breakdown)
-  const feeItems = [
-    { name: p.fee_type || 'FEE PAYMENT', amount: parseFloat(p.amount_paid) },
-    { name: 'DEVELOPMENT & LAB FEES', amount: null },
-    { name: 'EXAM & ACTIVITY FEES', amount: null }
-  ];
-
-  for (let i = 0; i < 3; i++) {
+  // Data rows (Individual fee components)
+  let computedTotal = 0;
+  for (let i = 0; i < numItemRows; i++) {
     const curRowY = tableY + rowH * (i + 1);
     doc.rect(x + 4, curRowY, w - 8, rowH).stroke('#000000');
     doc.font('Helvetica').fontSize(6.5).fillColor('#000000');
-    doc.text(String(i + 1), x + 4, curRowY + 3, { width: colSrW, align: 'center' });
-    doc.text(feeItems[i] ? feeItems[i].name : '', x + 4 + colSrW + 4, curRowY + 3, { width: colPartW - 6, align: 'left' });
-    if (feeItems[i] && feeItems[i].amount !== null) {
-      doc.text(feeItems[i].amount.toFixed(2), x + 4 + colSrW + colPartW, curRowY + 3, { width: colAmtW - 5, align: 'right' });
+    
+    const item = displayItems[i];
+    if (item && item.name) {
+      doc.text(String(i + 1), x + 4, curRowY + 2.5, { width: colSrW, align: 'center' });
+      doc.text(item.name, x + 4 + colSrW + 4, curRowY + 2.5, { width: colPartW - 6, align: 'left' });
+      if (item.amount !== null && !isNaN(item.amount)) {
+        computedTotal += item.amount;
+        doc.text(item.amount.toFixed(2), x + 4 + colSrW + colPartW, curRowY + 2.5, { width: colAmtW - 5, align: 'right' });
+      }
     }
   }
 
-  // Row 4: Total Amount
-  const totalRowY = tableY + rowH * 4;
-  const totalAmount = parseFloat(p.total_amount || p.amount_paid);
+  // Summary Rows
+  const receivedAmount = parseFloat(p.amount_paid) || 0;
+  const totalAmount = computedTotal > 0 ? computedTotal : (parseFloat(p.total_amount) || receivedAmount);
+
+  // Row: Total Amount
+  const totalRowY = tableY + rowH * (numItemRows + 1);
   doc.rect(x + 4, totalRowY, w - 8, rowH).stroke('#000000');
   doc.font('Helvetica-Bold').fontSize(6.5).fillColor('#000000');
-  doc.text('Total Amount', x + 4 + 6, totalRowY + 3, { width: colSrW + colPartW - 10, align: 'left' });
-  doc.text(totalAmount.toFixed(2), x + 4 + colSrW + colPartW, totalRowY + 3, { width: colAmtW - 5, align: 'right' });
+  doc.text('Total Amount', x + 4 + 6, totalRowY + 2.5, { width: colSrW + colPartW - 10, align: 'left' });
+  doc.text(totalAmount.toFixed(2), x + 4 + colSrW + colPartW, totalRowY + 2.5, { width: colAmtW - 5, align: 'right' });
 
-  // Row 5: Received Amt
-  const recRowY = tableY + rowH * 5;
-  const receivedAmount = parseFloat(p.amount_paid);
+  // Row: Received Amt
+  const recRowY = tableY + rowH * (numItemRows + 2);
   doc.rect(x + 4, recRowY, w - 8, rowH).stroke('#000000');
   doc.font('Helvetica-Bold').fontSize(6.5).fillColor('#000000');
-  doc.text('Received Amt:', x + 4 + 6, recRowY + 3, { width: colSrW + colPartW - 10, align: 'left' });
-  doc.text(receivedAmount.toFixed(2), x + 4 + colSrW + colPartW, recRowY + 3, { width: colAmtW - 5, align: 'right' });
+  doc.text('Received Amt:', x + 4 + 6, recRowY + 2.5, { width: colSrW + colPartW - 10, align: 'left' });
+  doc.text(receivedAmount.toFixed(2), x + 4 + colSrW + colPartW, recRowY + 2.5, { width: colAmtW - 5, align: 'right' });
 
-  // Row 6: Balance
-  const balRowY = tableY + rowH * 6;
-  const balance = Math.max(0, totalAmount - (parseFloat(p.cumulative_paid) || receivedAmount));
+  // Row: Balance
+  const balRowY = tableY + rowH * (numItemRows + 3);
+  const balance = Math.max(0, totalAmount - receivedAmount);
   doc.rect(x + 4, balRowY, w - 8, rowH).stroke('#000000');
   doc.font('Helvetica-Bold').fontSize(6.5).fillColor('#000000');
-  doc.text('Balance:', x + 4 + 6, balRowY + 3, { width: colSrW + colPartW - 10, align: 'left' });
-  doc.text(balance.toFixed(2), x + 4 + colSrW + colPartW, balRowY + 3, { width: colAmtW - 5, align: 'right' });
+  doc.text('Balance:', x + 4 + 6, balRowY + 2.5, { width: colSrW + colPartW - 10, align: 'left' });
+  doc.text(balance.toFixed(2), x + 4 + colSrW + colPartW, balRowY + 2.5, { width: colAmtW - 5, align: 'right' });
 
   // 6. Amount in words & Payment Mode
   const wordsY = balRowY + rowH + 4;
@@ -182,14 +217,14 @@ function drawReceiptVoucher(doc, p, x, y, w, h, copyType) {
      .text('Amount in words: ', x + 6, wordsY, { continued: true })
      .font('Helvetica').text(numberToWordsINR(receivedAmount));
 
-  const modeY = wordsY + 12;
+  const modeY = wordsY + 11;
   doc.font('Helvetica-Bold').fontSize(6.5)
      .text('Payment Mode : ', x + 6, modeY, { continued: true })
      .font('Helvetica').text(p.payment_mode || 'Cash');
 
   // 7. Footer Box: Date Time & Collected By / Authorized Signatory
-  const footerY = y + h - 42;
-  const footerH = 38;
+  const footerY = y + h - 38;
+  const footerH = 34;
   doc.rect(x + 4, footerY, w - 8, footerH).lineWidth(0.6).stroke('#000000');
   
   // Left: Date Time

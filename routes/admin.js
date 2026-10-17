@@ -44,46 +44,87 @@ router.use(isAdmin);
 // ==================== DASHBOARD ====================
 router.get('/', async (req, res) => {
   try {
-    const [[{ totalStudents }]] = await db.query('SELECT COUNT(*) as totalStudents FROM students');
-    const [[{ totalTeachers }]] = await db.query('SELECT COUNT(*) as totalTeachers FROM teachers');
-    const [[{ totalClasses }]] = await db.query('SELECT COUNT(*) as totalClasses FROM classes');
-    const [[{ feesCollected }]] = await db.query('SELECT COALESCE(SUM(amount_paid),0) as feesCollected FROM fee_payments WHERE MONTH(payment_date)=MONTH(CURDATE()) AND YEAR(payment_date)=YEAR(CURDATE())');
+    let totalStudents = 0, totalTeachers = 0, totalClasses = 0, feesCollected = 0, totalAllFees = 0;
+    let attendanceData = [], feeMonthly = [], recentStudents = [], notices = [];
 
-    // Attendance summary this month
-    const [attendanceData] = await db.query(`
-      SELECT status, COUNT(*) as count FROM attendance
-      WHERE MONTH(date)=MONTH(CURDATE()) AND YEAR(date)=YEAR(CURDATE())
-      GROUP BY status
-    `);
+    // 1. Total Students
+    try {
+      const [[sRow]] = await db.query('SELECT COUNT(*) as totalStudents FROM students');
+      totalStudents = sRow ? sRow.totalStudents : 0;
+    } catch (e) { console.error('Dashboard student count error:', e.message); }
 
-    // Fee collection last 6 months
-    const [feeMonthly] = await db.query(`
-      SELECT DATE_FORMAT(payment_date,'%b %Y') as month, SUM(amount_paid) as total
-      FROM fee_payments WHERE payment_date >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
-      GROUP BY YEAR(payment_date), MONTH(payment_date) ORDER BY payment_date
-    `);
+    // 2. Total Teachers
+    try {
+      const [[tRow]] = await db.query('SELECT COUNT(*) as totalTeachers FROM teachers');
+      totalTeachers = tRow ? tRow.totalTeachers : 0;
+    } catch (e) { console.error('Dashboard teacher count error:', e.message); }
 
-    // Recent students
-    const [recentStudents] = await db.query(`
-      SELECT u.name, u.email, s.admission_no, c.name as class_name, s.admission_date
-      FROM students s JOIN users u ON s.user_id=u.id LEFT JOIN classes c ON s.class_id=c.id
-      ORDER BY s.id DESC LIMIT 5
-    `);
+    // 3. Total Classes
+    try {
+      const [[cRow]] = await db.query('SELECT COUNT(*) as totalClasses FROM classes');
+      totalClasses = cRow ? cRow.totalClasses : 0;
+    } catch (e) { console.error('Dashboard class count error:', e.message); }
 
-    // Recent notices
-    const [notices] = await db.query('SELECT * FROM notices ORDER BY created_at DESC LIMIT 3');
+    // 4. Fees collected this month
+    try {
+      const [[fRow]] = await db.query('SELECT COALESCE(SUM(amount_paid),0) as feesCollected FROM fee_payments WHERE MONTH(payment_date)=MONTH(CURDATE()) AND YEAR(payment_date)=YEAR(CURDATE())');
+      feesCollected = fRow ? fRow.feesCollected : 0;
+    } catch (e) { console.error('Dashboard fee this month error:', e.message); }
+
+    // 5. Total all-time fee collections
+    try {
+      const [[afRow]] = await db.query('SELECT COALESCE(SUM(amount_paid),0) as totalAllFees FROM fee_payments');
+      totalAllFees = afRow ? afRow.totalAllFees : 0;
+    } catch (e) { console.error('Dashboard all fees error:', e.message); }
+
+    // 6. Attendance summary this month
+    try {
+      const [att] = await db.query(`
+        SELECT status, COUNT(*) as count FROM attendance
+        WHERE MONTH(date)=MONTH(CURDATE()) AND YEAR(date)=YEAR(CURDATE())
+        GROUP BY status
+      `);
+      attendanceData = att || [];
+    } catch (e) { console.error('Dashboard attendance error:', e.message); }
+
+    // 7. Fee collection last 6 months (Compatible with sql_mode=only_full_group_by)
+    try {
+      const [feeM] = await db.query(`
+        SELECT DATE_FORMAT(MIN(payment_date),'%b %Y') as month, COALESCE(SUM(amount_paid), 0) as total
+        FROM fee_payments 
+        WHERE payment_date >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
+        GROUP BY YEAR(payment_date), MONTH(payment_date) 
+        ORDER BY YEAR(payment_date) ASC, MONTH(payment_date) ASC
+      `);
+      feeMonthly = feeM || [];
+    } catch (e) { console.error('Dashboard fee monthly error:', e.message); }
+
+    // 8. Recent students
+    try {
+      const [rStudents] = await db.query(`
+        SELECT u.name, u.email, s.admission_no, c.name as class_name, s.admission_date
+        FROM students s JOIN users u ON s.user_id=u.id LEFT JOIN classes c ON s.class_id=c.id
+        ORDER BY s.id DESC LIMIT 5
+      `);
+      recentStudents = rStudents || [];
+    } catch (e) { console.error('Dashboard recent students error:', e.message); }
+
+    // 9. Recent notices
+    try {
+      const [nList] = await db.query('SELECT * FROM notices ORDER BY created_at DESC LIMIT 3');
+      notices = nList || [];
+    } catch (e) { console.error('Dashboard notices error:', e.message); }
 
     res.render('admin/dashboard', {
       title: 'Admin Dashboard',
-      totalStudents, totalTeachers, totalClasses, feesCollected,
+      totalStudents, totalTeachers, totalClasses, feesCollected, totalAllFees,
       attendanceData, feeMonthly, recentStudents, notices
     });
   } catch (err) {
-    console.error('Dashboard error:', err.message);
-    // IMPORTANT: Do NOT redirect to /login here — causes infinite redirect loop
+    console.error('Dashboard fatal error:', err.message);
     res.render('admin/dashboard', {
       title: 'Admin Dashboard',
-      totalStudents: 0, totalTeachers: 0, totalClasses: 0, feesCollected: 0,
+      totalStudents: 0, totalTeachers: 0, totalClasses: 0, feesCollected: 0, totalAllFees: 0,
       attendanceData: [], feeMonthly: [], recentStudents: [], notices: []
     });
   }
@@ -432,27 +473,110 @@ router.get('/fees/collect', async (req, res) => {
   // Parse as integers — empty string becomes NaN, preventing broken SQL queries
   const class_id = parseInt(req.query.class_id) || null;
   const student_id = parseInt(req.query.student_id) || null;
+  const new_receipt_id = parseInt(req.query.new_receipt_id) || null;
   let students = [], feeStructures = [], payments = [], selectedStudent = null;
   if (class_id) {
     [students] = await db.query(`SELECT s.id, u.name, s.admission_no, s.roll_number FROM students s JOIN users u ON s.user_id=u.id WHERE s.class_id=? ORDER BY s.roll_number, u.name`, [class_id]);
     [feeStructures] = await db.query('SELECT * FROM fee_structure WHERE class_id=? ORDER BY fee_type', [class_id]);
   }
   if (student_id) {
-    [payments] = await db.query(`SELECT fp.*, fs.fee_type, fs.amount as total_amount FROM fee_payments fp JOIN fee_structure fs ON fp.fee_structure_id=fs.id WHERE fp.student_id=? ORDER BY fp.payment_date DESC`, [student_id]);
-    [[selectedStudent]] = await db.query('SELECT s.*, u.name FROM students s JOIN users u ON s.user_id=u.id WHERE s.id=?', [student_id]);
+    [payments] = await db.query(`SELECT fp.*, fs.fee_type, fs.amount as total_amount FROM fee_payments fp LEFT JOIN fee_structure fs ON fp.fee_structure_id=fs.id WHERE fp.student_id=? ORDER BY fp.payment_date DESC, fp.id DESC`, [student_id]);
+    [[selectedStudent]] = await db.query(`SELECT s.*, u.name, u.phone, c.name as class_name, c.section, c.academic_year FROM students s JOIN users u ON s.user_id=u.id LEFT JOIN classes c ON s.class_id=c.id WHERE s.id=?`, [student_id]);
   }
-  res.render('admin/fee-collect', { title: 'Collect Fees', classes, students, feeStructures, payments, class_id, student_id, selectedStudent });
+  res.render('admin/fee-collect', { title: 'Collect Fees', classes, students, feeStructures, payments, class_id, student_id, selectedStudent, new_receipt_id });
 });
 
 router.post('/fees/collect', async (req, res) => {
-  const { student_id, fee_structure_id, amount_paid, payment_mode, remarks, class_id } = req.body;
+  const { 
+    student_id, 
+    class_id, 
+    fee_structure_id, 
+    months_paid, 
+    primary_fee_name, 
+    primary_fee_amount,
+    component_name, 
+    component_amount, 
+    amount_paid, 
+    payment_mode, 
+    payment_date,
+    remarks 
+  } = req.body;
+
   try {
     const receiptNo = 'RCP' + Date.now();
-    await db.query('INSERT INTO fee_payments (student_id,fee_structure_id,amount_paid,payment_mode,receipt_no,remarks,collected_by,payment_date) VALUES (?,?,?,?,?,?,?,CURDATE())',
-      [student_id, fee_structure_id, amount_paid, payment_mode, receiptNo, remarks, req.session.user.id]);
-    req.flash('success_msg', `Fee collected. Receipt: ${receiptNo}`);
+    
+    // Build breakdown array
+    const breakdown = [];
+    const pAmt = parseFloat(primary_fee_amount) || 0;
+    if (pAmt > 0) {
+      const pName = (primary_fee_name && primary_fee_name.trim()) ? primary_fee_name.trim() : 'Tuition Fee';
+      breakdown.push({
+        name: months_paid ? `${pName} (${months_paid})` : pName,
+        amount: pAmt
+      });
+    }
+
+    // Additional components (ID card, Annual, Diary, Development, Exam, etc.)
+    if (Array.isArray(component_name)) {
+      for (let i = 0; i < component_name.length; i++) {
+        const cName = (component_name[i] || '').trim();
+        const cAmt = parseFloat(component_amount[i]) || 0;
+        if (cName && cAmt > 0) {
+          breakdown.push({ name: cName, amount: cAmt });
+        }
+      }
+    } else if (component_name) {
+      const cName = (component_name || '').trim();
+      const cAmt = parseFloat(component_amount) || 0;
+      if (cName && cAmt > 0) {
+        breakdown.push({ name: cName, amount: cAmt });
+      }
+    }
+
+    // Determine total amount paid
+    let totalPaid = parseFloat(amount_paid);
+    const breakdownSum = breakdown.reduce((sum, item) => sum + item.amount, 0);
+    if (isNaN(totalPaid) || totalPaid <= 0) {
+      totalPaid = breakdownSum;
+    }
+
+    // If breakdown was empty but totalPaid was specified
+    if (breakdown.length === 0 && totalPaid > 0) {
+      breakdown.push({
+        name: months_paid ? `Fee (${months_paid})` : 'Fee Payment',
+        amount: totalPaid
+      });
+    }
+
+    const breakdownJson = JSON.stringify(breakdown);
+    const payDate = payment_date || new Date().toISOString().slice(0, 10);
+    const validFeeStructureId = parseInt(fee_structure_id) || null;
+
+    const [result] = await db.query(
+      `INSERT INTO fee_payments 
+       (student_id, fee_structure_id, amount_paid, payment_mode, receipt_no, remarks, collected_by, payment_date, months_paid, breakdown_json) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        student_id,
+        validFeeStructureId,
+        totalPaid,
+        payment_mode || 'Cash',
+        receiptNo,
+        remarks || null,
+        req.session.user.id,
+        payDate,
+        months_paid || null,
+        breakdownJson
+      ]
+    );
+
+    req.flash('success_msg', `Fee collected successfully! Receipt No: ${receiptNo}`);
+    res.redirect(`/admin/fees/collect?class_id=${class_id}&student_id=${student_id}&new_receipt_id=${result.insertId}`);
+  } catch (err) {
+    console.error('Fee collection error:', err);
+    req.flash('error_msg', 'Error collecting fee: ' + err.message);
     res.redirect(`/admin/fees/collect?class_id=${class_id}&student_id=${student_id}`);
-  } catch (err) { console.error(err); req.flash('error_msg', 'Error: ' + err.message); res.redirect('/admin/fees/collect'); }
+  }
 });
 
 // Fee Receipt PDF
@@ -464,9 +588,9 @@ router.get('/fees/receipt/:id', async (req, res) => {
              u.name as student_name, s.admission_no, s.mother_name, s.father_name, s.guardian_name,
              c.name as class_name, c.section, c.academic_year,
              admin_u.name as collector_name,
-             (SELECT COALESCE(SUM(amount_paid),0) FROM fee_payments WHERE student_id=fp.student_id AND fee_structure_id=fp.fee_structure_id) as cumulative_paid
+             (SELECT COALESCE(SUM(amount_paid),0) FROM fee_payments WHERE student_id=fp.student_id AND (fee_structure_id=fp.fee_structure_id OR fp.fee_structure_id IS NULL)) as cumulative_paid
       FROM fee_payments fp 
-      JOIN fee_structure fs ON fp.fee_structure_id=fs.id 
+      LEFT JOIN fee_structure fs ON fp.fee_structure_id=fs.id 
       JOIN students s ON fp.student_id=s.id 
       JOIN users u ON s.user_id=u.id 
       LEFT JOIN classes c ON s.class_id=c.id 

@@ -13,10 +13,10 @@ const pool = mysql.createPool({
   queueLimit: 0
 });
 
-// Auto-migration helper: ensures extra student fields exist
+// Auto-migration helper: ensures extra student & fee columns exist
 async function ensureSchema() {
   try {
-    const columns = [
+    const studentColumns = [
       { name: 'mother_name', def: 'VARCHAR(100) NULL' },
       { name: 'father_name', def: 'VARCHAR(100) NULL' },
       { name: 'blood_group', def: 'VARCHAR(10) NULL' },
@@ -25,7 +25,7 @@ async function ensureSchema() {
       { name: 'emergency_contact', def: 'VARCHAR(15) NULL' }
     ];
 
-    for (const col of columns) {
+    for (const col of studentColumns) {
       const [exists] = await pool.query(
         `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'students' AND COLUMN_NAME = ?`,
         [col.name]
@@ -33,6 +33,29 @@ async function ensureSchema() {
       if (exists.length === 0) {
         await pool.query(`ALTER TABLE students ADD COLUMN ${col.name} ${col.def}`);
       }
+    }
+
+    // Fee payments extra columns for month-wise collection & breakdown
+    const feeColumns = [
+      { name: 'months_paid', def: 'VARCHAR(255) NULL' },
+      { name: 'breakdown_json', def: 'TEXT NULL' }
+    ];
+
+    for (const col of feeColumns) {
+      const [exists] = await pool.query(
+        `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'fee_payments' AND COLUMN_NAME = ?`,
+        [col.name]
+      );
+      if (exists.length === 0) {
+        await pool.query(`ALTER TABLE fee_payments ADD COLUMN ${col.name} ${col.def}`);
+      }
+    }
+
+    // Allow fee_structure_id to be nullable for composite/multi-component fees
+    try {
+      await pool.query(`ALTER TABLE fee_payments MODIFY COLUMN fee_structure_id INT NULL`);
+    } catch (e) {
+      // Ignore if already nullable or constrained
     }
   } catch (err) {
     // Database may not be connected or tables not yet created on first boot

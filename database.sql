@@ -106,16 +106,18 @@ CREATE TABLE IF NOT EXISTS fee_structure (
 CREATE TABLE IF NOT EXISTS fee_payments (
   id INT AUTO_INCREMENT PRIMARY KEY,
   student_id INT NOT NULL,
-  fee_structure_id INT NOT NULL,
+  fee_structure_id INT NULL,
   amount_paid DECIMAL(10,2) NOT NULL,
   payment_date DATE DEFAULT (CURRENT_DATE),
   payment_mode ENUM('Cash','Online','Cheque','DD') DEFAULT 'Cash',
   receipt_no VARCHAR(50) UNIQUE,
   remarks TEXT,
+  months_paid VARCHAR(255) NULL,
+  breakdown_json TEXT NULL,
   collected_by INT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
-  FOREIGN KEY (fee_structure_id) REFERENCES fee_structure(id) ON DELETE CASCADE,
+  FOREIGN KEY (fee_structure_id) REFERENCES fee_structure(id) ON DELETE SET NULL,
   FOREIGN KEY (collected_by) REFERENCES users(id) ON DELETE SET NULL
 );
 
