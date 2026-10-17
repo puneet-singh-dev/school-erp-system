@@ -1,0 +1,225 @@
+<div class="d-flex justify-content-between align-items-center mb-4 d-print-none">
+  <div>
+    <h5 class="fw-bold mb-1"><i class="fa-solid fa-table-list text-primary me-2"></i>Class & Subject-Wise Marks Statement</h5>
+    <span class="text-muted small">Tabulation Sheet & Broadsheet &bull; Academic Session 2026-27</span>
+  </div>
+  <div class="d-flex gap-2">
+    <% if(selectedClass && selectedExam && students.length > 0) { %>
+    <a href="/admin/results/class-marks/pdf?class_id=<%- selectedClass.id %>&exam_id=<%- selectedExam.id %>" target="_blank" class="btn btn-danger">
+      <i class="fa-solid fa-file-pdf me-1"></i>Download PDF
+    </a>
+    <button onclick="window.print()" class="btn btn-outline-secondary">
+      <i class="fa-solid fa-print me-1"></i>Print Tabulation Sheet
+    </button>
+    <% } %>
+    <a href="/admin/results" class="btn btn-outline-primary"><i class="fa-solid fa-arrow-left me-1"></i>Back to Exams</a>
+  </div>
+</div>
+
+<!-- Filter Selection Card -->
+<div class="card shadow-sm mb-4 d-print-none">
+  <div class="card-body">
+    <form method="GET" action="/admin/results/class-marks" class="row g-3 align-items-end">
+      <div class="col-md-5">
+        <label class="form-label fw-semibold">Select Class *</label>
+        <select name="class_id" class="form-select" onchange="this.form.submit()" required>
+          <option value="">-- Choose Class --</option>
+          <% classes.forEach(c => { %>
+          <option value="<%- c.id %>" <%- selectedClass && selectedClass.id == c.id ? 'selected' : '' %>>
+            <%- c.name %> - <%- c.section %>
+          </option>
+          <% }) %>
+        </select>
+      </div>
+
+      <div class="col-md-5">
+        <label class="form-label fw-semibold">Select Examination *</label>
+        <select name="exam_id" class="form-select" onchange="this.form.submit()" required <%- !selectedClass ? 'disabled' : '' %>>
+          <option value="">-- Choose Exam --</option>
+          <% exams.forEach(e => { %>
+          <option value="<%- e.id %>" <%- selectedExam && selectedExam.id == e.id ? 'selected' : '' %>>
+            <%- e.name %> (<%- e.academic_year || '2026-27' %>)
+          </option>
+          <% }) %>
+        </select>
+      </div>
+
+      <div class="col-md-2">
+        <button type="submit" class="btn btn-primary w-100">
+          <i class="fa-solid fa-filter me-1"></i>Load Sheet
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<% if(selectedClass && selectedExam) { %>
+<!-- Printable Broadsheet / Tabulation Sheet -->
+<div class="card shadow-sm border-0 print-sheet">
+  <div class="card-body p-4">
+    <!-- Header with School Logo (Visible on screen and in print) -->
+    <div class="row align-items-center border-bottom pb-3 mb-3">
+      <div class="col-2 text-center">
+        <img src="/img/logo.png" alt="School Logo" style="width: 78px; height: 78px; object-fit: contain;">
+      </div>
+      <div class="col-8 text-center">
+        <h4 class="fw-bold mb-0 text-uppercase" style="letter-spacing: 0.5px;"><%- schoolName %></h4>
+        <div class="text-muted small"><%- schoolAddress %> &bull; Mob: 9129914501</div>
+        <div class="fw-bold text-primary mt-1" style="font-size: 1.05rem;">
+          TABULATION SHEET / MARKS STATEMENT (SESSION: 2026-27)
+        </div>
+      </div>
+      <div class="col-2 text-end small">
+        <div class="fw-bold text-dark">Class: <%- selectedClass.name %> - <%- selectedClass.section %></div>
+        <div class="text-muted">Exam: <%- selectedExam.name %></div>
+        <div class="text-muted">Date: <%- new Date().toLocaleDateString('en-IN') %></div>
+      </div>
+    </div>
+
+    <!-- Table of Marks -->
+    <% if(students.length > 0 && subjects.length > 0) { %>
+    <div class="table-responsive">
+      <table class="table table-bordered table-sm align-middle text-center mb-0" style="font-size: 0.82rem;">
+        <thead class="table-dark">
+          <tr>
+            <th style="width: 45px;">Roll</th>
+            <th style="width: 85px;">Adm No</th>
+            <th class="text-start" style="min-width: 150px;">Student Name</th>
+            <% subjects.forEach(sub => { %>
+            <th>
+              <div><%- sub.name %></div>
+              <small class="text-warning fw-normal" style="font-size: 0.7rem;">(Max: <%- sub.max_marks %>)</small>
+            </th>
+            <% }) %>
+            <th style="width: 65px;">Total</th>
+            <th style="width: 55px;">%</th>
+            <th style="width: 55px;">Grade</th>
+            <th style="width: 65px;">Result</th>
+            <th class="d-print-none" style="width: 60px;">Card</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% 
+            let passCount = 0;
+            let failCount = 0;
+            students.forEach(s => { 
+              let totalObt = 0;
+              let totalMax = 0;
+              let isPass = true;
+          %>
+          <tr>
+            <td class="fw-bold"><%- s.roll_number || '-' %></td>
+            <td><span class="badge bg-light text-dark border"><%- s.admission_no %></span></td>
+            <td class="text-start fw-semibold"><%- s.name %></td>
+            
+            <% subjects.forEach(sub => { 
+                 const res = marksMap[`${s.id}_${sub.id}`];
+                 const marks = res ? parseFloat(res.marks_obtained) : null;
+                 if(marks !== null) {
+                   totalObt += marks;
+                   totalMax += sub.max_marks;
+                   if((marks / sub.max_marks) * 100 < 33) isPass = false;
+                 } else {
+                   totalMax += sub.max_marks;
+                 }
+            %>
+            <td>
+              <% if(marks !== null) { %>
+                <span class="<%- (marks / sub.max_marks) * 100 < 33 ? 'text-danger fw-bold' : '' %>">
+                  <%- marks.toFixed(1) %>
+                </span>
+              <% } else { %>
+                <span class="text-muted">-</span>
+              <% } %>
+            </td>
+            <% }) %>
+
+            <% 
+              const pct = totalMax > 0 ? (totalObt / totalMax * 100).toFixed(1) : 0;
+              const grade = pct >= 90 ? 'A+' : pct >= 80 ? 'A' : pct >= 70 ? 'B' : pct >= 60 ? 'C' : pct >= 50 ? 'D' : 'F';
+              if(pct >= 33 && isPass) passCount++; else failCount++;
+            %>
+            <td class="fw-bold bg-light"><%- totalObt.toFixed(1) %> / <%- totalMax %></td>
+            <td class="fw-bold"><%- pct %>%</td>
+            <td><span class="badge <%- grade === 'F' ? 'bg-danger' : 'bg-success' %>"><%- grade %></span></td>
+            <td>
+              <span class="badge <%- isPass && pct >= 33 ? 'bg-success' : 'bg-danger' %>">
+                <%- isPass && pct >= 33 ? 'PASS' : 'FAIL' %>
+              </span>
+            </td>
+            <td class="d-print-none">
+              <a href="/admin/results/report-card/<%- s.id %>/<%- selectedExam.id %>" target="_blank" class="btn btn-xs btn-outline-primary btn-sm" title="View Student Report Card">
+                <i class="fa-solid fa-file-invoice"></i>
+              </a>
+            </td>
+          </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Summary Statistics and Signature Block -->
+    <div class="row mt-4 pt-2">
+      <div class="col-6">
+        <div class="p-2 bg-light rounded border small" style="max-width: 380px;">
+          <strong>Summary Statistics:</strong><br>
+          Total Students: <strong><%- students.length %></strong> &bull;
+          Passed: <strong class="text-success"><%- passCount %></strong> &bull;
+          Failed: <strong class="text-danger"><%- failCount %></strong> &bull;
+          Pass Percentage: <strong><%- students.length > 0 ? ((passCount / students.length) * 100).toFixed(1) : 0 %>%</strong>
+        </div>
+      </div>
+      <div class="col-6 text-end">
+        <div class="d-flex justify-content-end gap-5 mt-4 pt-3 small">
+          <div class="text-center">
+            <div style="border-top: 1px solid #333; width: 140px; margin-bottom: 4px;"></div>
+            <span>Class Teacher</span>
+          </div>
+          <div class="text-center">
+            <div style="border-top: 1px solid #333; width: 140px; margin-bottom: 4px;"></div>
+            <span>Exam Incharge</span>
+          </div>
+          <div class="text-center">
+            <div style="border-top: 1px solid #333; width: 140px; margin-bottom: 4px;"></div>
+            <span class="fw-bold">Principal</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <% } else { %>
+    <div class="alert alert-warning py-3 text-center">
+      <i class="fa-solid fa-triangle-exclamation me-2"></i>
+      <% if(!subjects.length) { %>
+        No subjects configured for class <strong><%- selectedClass.name %> - <%- selectedClass.section %></strong>. Please add subjects first.
+      <% } else { %>
+        No students enrolled in class <strong><%- selectedClass.name %> - <%- selectedClass.section %></strong>.
+      <% } %>
+    </div>
+    <% } %>
+  </div>
+</div>
+<% } else { %>
+<div class="card shadow-sm border-0 text-center py-5">
+  <div class="card-body">
+    <i class="fa-solid fa-graduation-cap fa-3x text-muted mb-3 d-block"></i>
+    <h5 class="text-muted">Select a Class and Examination above to view and print the Tabulation Marks Statement.</h5>
+    <p class="text-muted small">Session: 2026-27 &bull; Shri Amrit Lal Smarak School And College</p>
+  </div>
+</div>
+<% } %>
+
+<style>
+@media print {
+  @page { size: A4 landscape; margin: 10mm; }
+  body { background: white !important; font-size: 11pt; }
+  .wrapper { display: block !important; }
+  .sidebar, .topbar, .btn, .d-print-none, form { display: none !important; }
+  .main-content { margin-left: 0 !important; padding: 0 !important; width: 100% !important; }
+  .card { box-shadow: none !important; border: none !important; }
+  .print-sheet { display: block !important; width: 100% !important; }
+  table { border-collapse: collapse !important; width: 100% !important; }
+  th, td { border: 1px solid #000 !important; padding: 4px 6px !important; }
+  .table-dark { background-color: #f0f0f0 !important; color: #000 !important; }
+  .badge { border: none !important; color: #000 !important; background: transparent !important; padding: 0 !important; font-weight: bold !important; }
+}
+</style>

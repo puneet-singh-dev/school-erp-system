@@ -44,7 +44,7 @@
               <div class="att-buttons">
                 <% ['Present','Absent','Late','Leave'].forEach(status => { %>
                 <label class="att-label att-<%- status.toLowerCase() %> <%- (attendanceMap[s.id]||'Present')===status?'selected':'' %>">
-                  <input type="radio" name="statuses[<%- s.id %>]" value="<%- status %>" <%- (attendanceMap[s.id]||'Present')===status?'checked':'' %> class="d-none">
+                  <input type="radio" name="statuses[<%- s.id %>]" value="<%- status %>" <%- (attendanceMap[s.id]||'Present')===status?'checked':'' %> style="position:absolute;opacity:0;pointer-events:none;width:0;height:0;">
                   <%- status %>
                 </label>
                 <% }) %>
@@ -55,7 +55,10 @@
         </tbody>
       </table>
     </div>
-    <div class="card-footer"><button type="submit" class="btn btn-primary px-4"><i class="fa-solid fa-save me-1"></i>Save Attendance</button></div>
+    <div class="card-footer d-flex justify-content-between align-items-center">
+      <button type="submit" class="btn btn-primary px-4"><i class="fa-solid fa-save me-1"></i>Save Attendance</button>
+      <small class="text-muted"><i class="fa-solid fa-circle-info me-1"></i>Default status is 'Present' unless changed.</small>
+    </div>
   </div>
 </form>
 <% } else if(class_id) { %>
@@ -70,10 +73,18 @@ function markAll(status) {
     r.parentElement.classList.add('selected');
   });
 }
+
 document.querySelectorAll('.att-label').forEach(l => {
-  l.addEventListener('click', () => {
-    l.closest('.att-buttons').querySelectorAll('.att-label').forEach(x => x.classList.remove('selected'));
-    l.classList.add('selected');
+  l.addEventListener('click', function(e) {
+    const radio = this.querySelector('input[type="radio"]');
+    if (radio) {
+      radio.checked = true;
+    }
+    const group = this.closest('.att-buttons');
+    if (group) {
+      group.querySelectorAll('.att-label').forEach(x => x.classList.remove('selected'));
+      this.classList.add('selected');
+    }
   });
 });
 </script>

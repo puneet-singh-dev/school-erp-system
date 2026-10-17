@@ -5,11 +5,20 @@ const fs = require('fs');
 const { numberToWordsINR } = require('./numberToWords');
 
 /**
- * Draws a school seal / crest icon in vector graphics
+ * Draws the school logo from public/img/logo.png with vector fallback
  */
 function drawSchoolLogo(doc, x, y, size) {
+  const logoPath = path.join(__dirname, '../public/img/logo.png');
+  if (fs.existsSync(logoPath)) {
+    try {
+      doc.image(logoPath, x, y, { width: size, height: size });
+      return;
+    } catch (err) {
+      console.warn('Could not render logo image, using fallback:', err.message);
+    }
+  }
   doc.save();
-  // Outer shield
+  // Fallback vector shield
   doc.lineWidth(1).strokeColor('#1b3a57').fillColor('#f4f7fb');
   doc.path(`M ${x} ${y} 
             L ${x + size} ${y} 
@@ -17,7 +26,6 @@ function drawSchoolLogo(doc, x, y, size) {
             Q ${x + size * 0.5} ${y + size * 1.15} ${x} ${y + size * 0.6} 
             Z`).fillAndStroke();
   
-  // Inner crest book / graduation motif
   doc.fillColor('#1b3a57');
   doc.fontSize(size * 0.35).font('Helvetica-Bold');
   doc.text('ERP', x, y + size * 0.28, { width: size, align: 'center' });
@@ -42,11 +50,11 @@ function drawReceiptVoucher(doc, p, x, y, w, h, copyType) {
   doc.roundedRect(x + 4, headerBoxY, w - 8, headerBoxH, 2).lineWidth(0.6).stroke('#333333');
 
   // School Emblem / Logo on the left
-  drawSchoolLogo(doc, x + 7, headerBoxY + 5, 32);
+  drawSchoolLogo(doc, x + 7, headerBoxY + 5, 34);
 
   // School Info
-  const textX = x + 40;
-  const textW = w - 46;
+  const textX = x + 44;
+  const textW = w - 50;
   doc.font('Helvetica-Bold').fontSize(8.5).fillColor('#000000')
      .text(schoolName.toUpperCase(), textX, headerBoxY + 4, { width: textW, align: 'center' });
   
@@ -58,7 +66,7 @@ function drawReceiptVoucher(doc, p, x, y, w, h, copyType) {
 
   // 2. Sub-Header (Academic year, Badge, Copy Type)
   const subY = y + 51;
-  const academicYear = p.academic_year || '2026-2027';
+  const academicYear = p.academic_year || '2026-27';
   doc.font('Helvetica-Bold').fontSize(7).fillColor('#000000')
      .text(academicYear, x + 6, subY + 3);
 
@@ -203,29 +211,11 @@ function drawReceiptVoucher(doc, p, x, y, w, h, copyType) {
 }
 
 /**
- * Draws an empty / perforated slip guide for the remaining half of the A4 page
- */
-function drawEmptyHalfSlipGuide(doc, yStart) {
-  doc.save();
-  doc.rect(14, yStart, 566, 394).dash(4, { space: 4 }).lineWidth(0.8).strokeColor('#aaaaaa').stroke();
-  doc.fillColor('#777777').font('Helvetica-Bold').fontSize(9);
-  doc.text('✂ [ REMAINING HALF OF A4 SHEET - RESERVED FOR NEXT STUDENT RECEIPT ] ✂', 14, yStart + 175, {
-    width: 566,
-    align: 'center'
-  });
-  doc.font('Helvetica').fontSize(8).fillColor('#999999');
-  doc.text('Cut along the dotted line above to separate, or re-feed this half sheet to print another receipt.', 14, yStart + 195, {
-    width: 566,
-    align: 'center'
-  });
-  doc.restore();
-}
-
-/**
  * Generates the full A4 Sheet Fee Receipt:
  * - Top Half: Left = Student Copy, Right = College Copy
+ * - Middle: Dotted cutting line
  * - Bottom Half: If second receipt provided, prints second student's copies.
- *                Otherwise leaves half page clean with cutting guide.
+ *                Otherwise leaves half page clean with only the dotted line.
  */
 function generateFeeReceiptPDF(res, primaryPayment, secondPayment = null) {
   const doc = new PDFDocument({
@@ -248,24 +238,18 @@ function generateFeeReceiptPDF(res, primaryPayment, secondPayment = null) {
   // Middle vertical cut line (between Student Copy and College Copy)
   doc.save();
   doc.moveTo(297, topY).lineTo(297, topY + voucherHeight).dash(3, { space: 3 }).strokeColor('#888888').stroke();
-  doc.font('Helvetica').fontSize(8).fillColor('#888888').text('✂', 293, topY + 190);
   doc.restore();
 
   // Right: College Copy
   drawReceiptVoucher(doc, primaryPayment, 304, topY, voucherWidth, voucherHeight, 'College copy');
 
-  // --- HORIZONTAL HALF-PAGE CUTTING LINE ---
+  // --- HORIZONTAL HALF-PAGE CUTTING LINE (DOTTED LINE ONLY) ---
   const midY = 418;
   doc.save();
   doc.moveTo(10, midY).lineTo(585, midY).dash(4, { space: 4 }).strokeColor('#666666').stroke();
-  doc.font('Helvetica-Bold').fontSize(6.5).fillColor('#555555');
-  doc.text('✂ - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - CUT ALONG LINE (HALF A4 PAGE) - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - ✂', 10, midY - 3, {
-    width: 575,
-    align: 'center'
-  });
   doc.restore();
 
-  // --- BOTTOM HALF (Second Student OR Cut Guide) ---
+  // --- BOTTOM HALF (Second Student ONLY if provided) ---
   const bottomY = 430;
   if (secondPayment) {
     // Left: Student Copy
@@ -274,15 +258,12 @@ function generateFeeReceiptPDF(res, primaryPayment, secondPayment = null) {
     // Middle vertical cut line
     doc.save();
     doc.moveTo(297, bottomY).lineTo(297, bottomY + voucherHeight).dash(3, { space: 3 }).strokeColor('#888888').stroke();
-    doc.font('Helvetica').fontSize(8).fillColor('#888888').text('✂', 293, bottomY + 190);
     doc.restore();
 
     // Right: College Copy
     drawReceiptVoucher(doc, secondPayment, 304, bottomY, voucherWidth, voucherHeight, 'College copy');
-  } else {
-    // Leave clean half page with instructions / cut box
-    drawEmptyHalfSlipGuide(doc, bottomY);
   }
+  // Bottom half has no text - only the dotted line above
 
   doc.end();
 }

@@ -40,17 +40,26 @@ router.get('/attendance', async (req, res) => {
 
 router.post('/attendance/save', async (req, res) => {
   const { class_id, date, statuses } = req.body;
+  const cleanClassId = parseInt(class_id, 10);
+  const cleanDate = date || new Date().toISOString().split('T')[0];
   try {
     if (statuses && typeof statuses === 'object') {
       for (const [studentId, status] of Object.entries(statuses)) {
-        await db.query(`INSERT INTO attendance (student_id,class_id,date,status,marked_by) VALUES (?,?,?,?,?)
-          ON DUPLICATE KEY UPDATE status=?, marked_by=?`,
-          [studentId, class_id, date, status, req.session.user.id, status, req.session.user.id]);
+        const cleanStudentId = parseInt(studentId, 10);
+        if (!isNaN(cleanStudentId)) {
+          await db.query(`INSERT INTO attendance (student_id,class_id,date,status,marked_by) VALUES (?,?,?,?,?)
+            ON DUPLICATE KEY UPDATE status=?, marked_by=?`,
+            [cleanStudentId, cleanClassId, cleanDate, status, req.session.user.id, status, req.session.user.id]);
+        }
       }
     }
-    req.flash('success_msg', 'Attendance saved');
-    res.redirect(`/teacher/attendance?class_id=${class_id}&date=${date}`);
-  } catch (err) { console.error(err); req.flash('error_msg', 'Error'); res.redirect('/teacher/attendance'); }
+    req.flash('success_msg', 'Attendance saved successfully!');
+    res.redirect(`/teacher/attendance?class_id=${cleanClassId}&date=${cleanDate}`);
+  } catch (err) {
+    console.error('Error saving attendance:', err);
+    req.flash('error_msg', 'Error saving attendance: ' + err.message);
+    res.redirect(`/teacher/attendance?class_id=${cleanClassId || ''}&date=${cleanDate}`);
+  }
 });
 
 // Results entry

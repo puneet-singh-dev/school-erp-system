@@ -9,6 +9,8 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const { generateFeeReceiptPDF } = require('../utils/receiptPdf');
+const { generateClassMarksPDF } = require('../utils/marksheetPdf');
+const { generateClassFeeRemindersHindiPDF } = require('../utils/feeReminderHindiPdf');
 
 // Configure Multer for student profile photo uploads
 const uploadDir = path.join(__dirname, '../public/uploads/students');
@@ -364,17 +366,26 @@ router.get('/attendance', async (req, res) => {
 
 router.post('/attendance/save', async (req, res) => {
   const { class_id, date, statuses } = req.body;
+  const cleanClassId = parseInt(class_id, 10);
+  const cleanDate = date ? moment(date).format('YYYY-MM-DD') : moment().format('YYYY-MM-DD');
   try {
     if (statuses && typeof statuses === 'object') {
       for (const [studentId, status] of Object.entries(statuses)) {
-        await db.query(`INSERT INTO attendance (student_id,class_id,date,status,marked_by) VALUES (?,?,?,?,?)
-          ON DUPLICATE KEY UPDATE status=?, marked_by=?`,
-          [studentId, class_id, date, status, req.session.user.id, status, req.session.user.id]);
+        const cleanStudentId = parseInt(studentId, 10);
+        if (!isNaN(cleanStudentId)) {
+          await db.query(`INSERT INTO attendance (student_id,class_id,date,status,marked_by) VALUES (?,?,?,?,?)
+            ON DUPLICATE KEY UPDATE status=?, marked_by=?`,
+            [cleanStudentId, cleanClassId, cleanDate, status, req.session.user.id, status, req.session.user.id]);
+        }
       }
     }
-    req.flash('success_msg', 'Attendance saved');
-    res.redirect(`/admin/attendance?class_id=${class_id}&date=${date}`);
-  } catch (err) { console.error(err); req.flash('error_msg', 'Error saving attendance'); res.redirect('/admin/attendance'); }
+    req.flash('success_msg', 'Attendance saved successfully!');
+    res.redirect(`/admin/attendance?class_id=${cleanClassId}&date=${cleanDate}`);
+  } catch (err) {
+    console.error('Error saving attendance:', err);
+    req.flash('error_msg', 'Error saving attendance: ' + err.message);
+    res.redirect(`/admin/attendance?class_id=${cleanClassId || ''}&date=${cleanDate}`);
+  }
 });
 
 router.get('/attendance/report', async (req, res) => {
@@ -487,76 +498,64 @@ router.get('/fees/reminder/:studentId', async (req, res) => {
     if (!students.length) return res.status(404).send('Student not found');
     const student = students[0];
 
-    const [pending] = await db.query(`
-      SELECT fs.fee_type, fs.amount, fs.due_date, COALESCE(SUM(fp.amount_paid),0) as paid
-      FROM fee_structure fs LEFT JOIN fee_payments fp ON fs.id=fp.fee_structure_id AND fp.student_id=?
-      WHERE fs.class_id=? GROUP BY fs.id HAVING (fs.amount - COALESCE(SUM(fp.amount_paid),0)) > 0`, [req.params.studentId, student.class_id]);
+    const [classFeeStructure] = await db.query('SELECT * FROM fee_structure WHERE class_id=?', [student.class_id]);
 
-    const doc = new PDFDocument({ size: 'A4', margin: 50 });
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename=reminder_${student.admission_no}.pdf`);
-    doc.pipe(res);
+    const [[feeSummary]] = await db.query(`
+      SELECT SUM(fs.amount) as total_fees, COALESCE(SUM(fp.amount_paid),0) as paid,
+             SUM(fs.amount) - COALESCE(SUM(fp.amount_paid),0) as balance
+      FROM fee_structure fs 
+      LEFT JOIN fee_payments fp ON fp.fee_structure_id=fs.id AND fp.student_id=?
+      WHERE fs.class_id=?`, [student.id, student.class_id]);
 
-    // Header
-    doc.fontSize(22).font('Helvetica-Bold').text('SCHOOL ERP', { align: 'center' });
-    doc.fontSize(11).font('Helvetica').text('Phone: 9876543210 | Email: info@school.com', { align: 'center' });
-    doc.moveDown(0.5).moveTo(50, doc.y).lineTo(545, doc.y).lineWidth(2).stroke().moveDown(0.5);
-    doc.fontSize(14).font('Helvetica-Bold').text('FEE REMINDER NOTICE', { align: 'center' }).moveDown();
+    student.total_fees = feeSummary ? feeSummary.total_fees : 0;
+    student.paid = feeSummary ? feeSummary.paid : 0;
+    student.balance = feeSummary ? feeSummary.balance : 0;
 
-    doc.fontSize(11).font('Helvetica');
-    doc.text(`Date: ${moment().format('DD MMMM YYYY')}`, { align: 'right' });
-    doc.text(`To,`);
-    doc.text(`${student.guardian_name || student.student_name}`);
-    doc.text(`Parent/Guardian of ${student.student_name}`);
-    doc.text(`Class: ${student.class_name} - ${student.section} | Adm. No: ${student.admission_no}`);
-    doc.moveDown();
-    doc.text('Dear Parent/Guardian,');
-    doc.moveDown(0.5);
-    doc.text('This is to inform you that the following fees are due/pending for your ward. Kindly arrange to clear the outstanding amount at the earliest to avoid any inconvenience.', { align: 'justify' });
-    doc.moveDown();
+    const selectedClass = { name: student.class_name, section: student.section, id: student.class_id };
+    generateClassFeeRemindersHindiPDF(res, selectedClass, [student], classFeeStructure);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Error generating notice: ' + err.message);
+  }
+});
 
-    // Table header
-    const tableTop = doc.y;
-    doc.font('Helvetica-Bold').fontSize(10);
-    doc.rect(50, tableTop, 495, 20).fill('#1a5276').stroke();
-    doc.fillColor('white').text('Fee Type', 55, tableTop + 5, { width: 180 });
-    doc.text('Total Amount', 235, tableTop + 5, { width: 100 });
-    doc.text('Amount Paid', 335, tableTop + 5, { width: 100 });
-    doc.text('Balance Due', 435, tableTop + 5, { width: 105 });
-    doc.fillColor('black');
+// Class-wise Fee Reminder Notices in Hindi (3 students per A4 page)
+router.get('/fees/reminder-class/:classId', async (req, res) => {
+  try {
+    const classId = parseInt(req.params.classId, 10);
+    const [[selectedClass]] = await db.query('SELECT * FROM classes WHERE id=?', [classId]);
+    if (!selectedClass) return res.status(404).send('Class not found');
 
-    let y = tableTop + 20;
-    let totalBalance = 0;
-    pending.forEach((fee, i) => {
-      const balance = fee.amount - fee.paid;
-      totalBalance += balance;
-      if (i % 2 === 0) doc.rect(50, y, 495, 20).fill('#eaf4fb').stroke();
-      doc.font('Helvetica').fontSize(10).fillColor('black');
-      doc.text(fee.fee_type, 55, y + 5, { width: 180 });
-      doc.text('₹ ' + parseFloat(fee.amount).toFixed(2), 235, y + 5, { width: 100 });
-      doc.text('₹ ' + parseFloat(fee.paid).toFixed(2), 335, y + 5, { width: 100 });
-      doc.text('₹ ' + parseFloat(balance).toFixed(2), 435, y + 5, { width: 105 });
-      y += 20;
-    });
+    const [classFeeStructure] = await db.query('SELECT * FROM fee_structure WHERE class_id=?', [classId]);
 
-    doc.rect(50, y, 495, 22).fill('#1a5276').stroke();
-    doc.font('Helvetica-Bold').fontSize(11).fillColor('white');
-    doc.text('TOTAL PENDING', 55, y + 5);
-    doc.text('₹ ' + totalBalance.toFixed(2), 435, y + 5);
-    doc.fillColor('black');
+    const [studentsWithPending] = await db.query(`
+      SELECT s.id as student_id, u.name, s.admission_no, s.roll_number, c.name as class_name, c.section,
+        SUM(fs.amount) as total_fees, COALESCE(SUM(fp.amount_paid),0) as paid,
+        SUM(fs.amount) - COALESCE(SUM(fp.amount_paid),0) as balance
+      FROM students s 
+      JOIN users u ON s.user_id=u.id 
+      LEFT JOIN classes c ON s.class_id=c.id
+      JOIN fee_structure fs ON fs.class_id=s.class_id
+      LEFT JOIN fee_payments fp ON fp.student_id=s.id AND fp.fee_structure_id=fs.id
+      WHERE s.class_id=? 
+      GROUP BY s.id 
+      HAVING balance > 0 
+      ORDER BY s.roll_number, u.name`, [classId]);
 
-    doc.moveDown(2);
-    doc.font('Helvetica').fontSize(10);
-    doc.text('Please visit the school office or pay online at your earliest convenience.');
-    doc.moveDown();
-    doc.text('Thanking You,');
-    doc.moveDown(2);
-    doc.font('Helvetica-Bold').text('Principal / Administrator');
-    doc.font('Helvetica').text('School ERP');
-    doc.moveDown().moveTo(50, doc.y).lineTo(545, doc.y).stroke();
-    doc.fontSize(9).fillColor('gray').text('This is a computer generated notice.', { align: 'center' });
-    doc.end();
-  } catch (err) { console.error(err); res.status(500).send('Error generating notice'); }
+    if (!studentsWithPending.length) {
+      return res.send(`
+        <script>
+          alert('No students with pending fees in this class!');
+          window.close();
+        </script>
+      `);
+    }
+
+    generateClassFeeRemindersHindiPDF(res, selectedClass, studentsWithPending, classFeeStructure);
+  } catch (err) {
+    console.error('Error generating class fee reminders:', err);
+    res.status(500).send('Error generating class fee reminders: ' + err.message);
+  }
 });
 
 // Pending Fees List
@@ -639,13 +638,31 @@ router.get('/results/report-card/:studentId/:examId', async (req, res) => {
     res.setHeader('Content-Disposition', `inline; filename=report_card_${student.admission_no}.pdf`);
     doc.pipe(res);
 
-    // Header
-    doc.rect(40, 40, 515, 80).fill('#1a5276').stroke();
-    doc.fillColor('white').fontSize(22).font('Helvetica-Bold').text('SCHOOL ERP', 50, 55, { align: 'center', width: 495 });
-    doc.fontSize(11).font('Helvetica').text('Progress Report Card', 50, 82, { align: 'center', width: 495 });
-    doc.fillColor('black').moveDown(4);
+    // Header Box with School Logo & Branding
+    const logoPath = path.join(__dirname, '../public/img/logo.png');
+    doc.rect(40, 36, 515, 88).fill('#1a365d').stroke();
+    
+    if (fs.existsSync(logoPath)) {
+      try {
+        doc.image(logoPath, 52, 44, { width: 70, height: 70 });
+      } catch (err) {}
+    }
 
-    doc.fontSize(13).font('Helvetica-Bold').text('STUDENT INFORMATION', 40, 135);
+    const headerTextX = 130;
+    const headerTextW = 415;
+    const schoolName = process.env.SCHOOL_NAME || 'Shri Amrit Lal Smarak School And College';
+    const schoolAddress = process.env.SCHOOL_ADDRESS || 'Vijay Nagar, Karma Bazar, Prayagraj (U.P) - Mob: 9129914501';
+
+    doc.fillColor('white').fontSize(15).font('Helvetica-Bold')
+       .text(schoolName.toUpperCase(), headerTextX, 48, { width: headerTextW, align: 'center' });
+    doc.fontSize(8.5).font('Helvetica')
+       .text(schoolAddress, headerTextX, 70, { width: headerTextW, align: 'center' });
+    doc.fontSize(11).font('Helvetica-Bold').fillColor('#f6e05e')
+       .text('PROGRESS REPORT CARD (SESSION 2026-27)', headerTextX, 86, { width: headerTextW, align: 'center' });
+    
+    doc.fillColor('black');
+
+    doc.fontSize(12).font('Helvetica-Bold').text('STUDENT ACADEMIC PROFILE', 40, 136);
     doc.moveTo(40, 152).lineTo(555, 152).stroke();
 
     doc.fontSize(10).font('Helvetica');
@@ -655,7 +672,7 @@ router.get('/results/report-card/:studentId/:examId', async (req, res) => {
     doc.font('Helvetica-Bold').text('Adm. No:', 40, y1 + 18).font('Helvetica').text(student.admission_no, 95, y1 + 18);
     doc.font('Helvetica-Bold').text('Roll No:', 300, y1 + 18).font('Helvetica').text(student.roll_number || '-', 345, y1 + 18);
     doc.font('Helvetica-Bold').text('Exam:', 40, y1 + 36).font('Helvetica').text(exam.name, 80, y1 + 36);
-    doc.font('Helvetica-Bold').text('Year:', 300, y1 + 36).font('Helvetica').text(student.academic_year || '', 335, y1 + 36);
+    doc.font('Helvetica-Bold').text('Session:', 300, y1 + 36).font('Helvetica').text(student.academic_year || '2026-27', 350, y1 + 36);
 
     const tableY = y1 + 65;
     doc.rect(40, tableY, 515, 22).fill('#1a5276').stroke();
@@ -704,6 +721,89 @@ router.get('/results/report-card/:studentId/:examId', async (req, res) => {
     doc.moveDown(2).fontSize(9).fillColor('gray').text('This is a computer generated report card.', { align: 'center' });
     doc.end();
   } catch (err) { console.error(err); res.status(500).send('Error generating report card'); }
+});
+
+// ==================== CLASS-WISE & SUBJECT-WISE MARKS STATEMENT ====================
+router.get('/results/class-marks', async (req, res) => {
+  try {
+    const [classes] = await db.query('SELECT * FROM classes ORDER BY name, section');
+    const classId = parseInt(req.query.class_id, 10) || (classes.length > 0 ? classes[0].id : null);
+    
+    let exams = [];
+    let selectedClass = null;
+    let selectedExam = null;
+    let students = [];
+    let subjects = [];
+    const marksMap = {};
+
+    if (classId) {
+      [[selectedClass]] = await db.query('SELECT * FROM classes WHERE id=?', [classId]);
+      [exams] = await db.query('SELECT * FROM exams WHERE class_id=? ORDER BY id DESC', [classId]);
+      const examId = parseInt(req.query.exam_id, 10) || (exams.length > 0 ? exams[0].id : null);
+
+      if (examId) {
+        [[selectedExam]] = await db.query('SELECT * FROM exams WHERE id=?', [examId]);
+        [students] = await db.query(`
+          SELECT s.id, u.name, s.roll_number, s.admission_no 
+          FROM students s 
+          JOIN users u ON s.user_id=u.id 
+          WHERE s.class_id=? 
+          ORDER BY s.roll_number, u.name`, [classId]);
+        
+        [subjects] = await db.query('SELECT * FROM subjects WHERE class_id=? ORDER BY name', [classId]);
+        const [results] = await db.query('SELECT * FROM results WHERE exam_id=?', [examId]);
+        results.forEach(r => {
+          marksMap[`${r.student_id}_${r.subject_id}`] = r;
+        });
+      }
+    }
+
+    res.render('admin/class-marks', {
+      title: 'Class & Subject-Wise Marks Statement',
+      classes,
+      selectedClass,
+      exams,
+      selectedExam,
+      students,
+      subjects,
+      marksMap
+    });
+  } catch (err) {
+    console.error('Error loading class marks:', err);
+    req.flash('error_msg', 'Error loading marks statement: ' + err.message);
+    res.redirect('/admin/results');
+  }
+});
+
+router.get('/results/class-marks/pdf', async (req, res) => {
+  try {
+    const classId = parseInt(req.query.class_id, 10);
+    const examId = parseInt(req.query.exam_id, 10);
+    if (!classId || !examId) return res.status(400).send('Class ID and Exam ID are required');
+
+    const [[selectedClass]] = await db.query('SELECT * FROM classes WHERE id=?', [classId]);
+    const [[selectedExam]] = await db.query('SELECT * FROM exams WHERE id=?', [examId]);
+    if (!selectedClass || !selectedExam) return res.status(404).send('Class or Exam not found');
+
+    const [students] = await db.query(`
+      SELECT s.id, u.name, s.roll_number, s.admission_no 
+      FROM students s 
+      JOIN users u ON s.user_id=u.id 
+      WHERE s.class_id=? 
+      ORDER BY s.roll_number, u.name`, [classId]);
+
+    const [subjects] = await db.query('SELECT * FROM subjects WHERE class_id=? ORDER BY name', [classId]);
+    const [results] = await db.query('SELECT * FROM results WHERE exam_id=?', [examId]);
+    const marksMap = {};
+    results.forEach(r => {
+      marksMap[`${r.student_id}_${r.subject_id}`] = r;
+    });
+
+    generateClassMarksPDF(res, selectedClass, selectedExam, students, subjects, marksMap);
+  } catch (err) {
+    console.error('Error generating marksheet PDF:', err);
+    res.status(500).send('Error generating marksheet PDF: ' + err.message);
+  }
 });
 
 // ==================== NOTICES ====================

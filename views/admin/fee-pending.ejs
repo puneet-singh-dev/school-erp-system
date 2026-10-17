@@ -18,9 +18,14 @@
 
 <% if(pendingFees.length > 0) { %>
 <div class="card shadow-sm">
-  <div class="card-header d-flex justify-content-between">
-    <h6 class="mb-0 fw-bold">Students with Pending Fees</h6>
-    <span class="badge bg-danger"><%- pendingFees.length %> students</span>
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <div>
+      <h6 class="mb-0 fw-bold d-inline me-2">Students with Pending Fees</h6>
+      <span class="badge bg-danger"><%- pendingFees.length %> students</span>
+    </div>
+    <a href="/admin/fees/reminder-class/<%- class_id %>" target="_blank" class="btn btn-warning btn-sm shadow-sm">
+      <i class="fa-solid fa-file-pdf me-1"></i>Print All Class Hindi Notices (3 per A4 page)
+    </a>
   </div>
   <div class="card-body p-0">
     <table class="table table-hover align-middle mb-0">
