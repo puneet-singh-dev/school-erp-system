@@ -1,0 +1,196 @@
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+  <div>
+    <h5 class="fw-bold mb-1"><i class="fa-solid fa-clock-rotate-left text-primary me-2"></i>Fee Payment History</h5>
+    <p class="text-muted small mb-0">Complete ledger of all submitted student fees, receipts, and collection transactions.</p>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="/admin/fees/collect" class="btn btn-primary">
+      <i class="fa-solid fa-plus me-1"></i>Collect New Fee
+    </a>
+    <a href="/admin/fees/pending" class="btn btn-outline-warning">
+      <i class="fa-solid fa-circle-exclamation me-1"></i>Pending Fees
+    </a>
+  </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row g-3 mb-4">
+  <div class="col-sm-6 col-lg-3">
+    <div class="card bg-primary text-white border-0 shadow-sm p-3">
+      <div class="d-flex align-items-center justify-content-between">
+        <div>
+          <div class="small opacity-75 text-uppercase fw-semibold">Filtered Collection</div>
+          <h3 class="fw-bold mb-0">₹<%- parseFloat(summary.filteredTotal || 0).toLocaleString('en-IN') %></h3>
+        </div>
+        <i class="fa-solid fa-indian-rupee-sign fa-2x opacity-50"></i>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="card bg-success text-white border-0 shadow-sm p-3">
+      <div class="d-flex align-items-center justify-content-between">
+        <div>
+          <div class="small opacity-75 text-uppercase fw-semibold">Transactions</div>
+          <h3 class="fw-bold mb-0"><%- payments.length %></h3>
+        </div>
+        <i class="fa-solid fa-receipt fa-2x opacity-50"></i>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="card bg-info text-white border-0 shadow-sm p-3">
+      <div class="d-flex align-items-center justify-content-between">
+        <div>
+          <div class="small opacity-75 text-uppercase fw-semibold">Cash Collections</div>
+          <h3 class="fw-bold mb-0">₹<%- parseFloat(summary.cashTotal || 0).toLocaleString('en-IN') %></h3>
+        </div>
+        <i class="fa-solid fa-money-bill-wave fa-2x opacity-50"></i>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="card bg-secondary text-white border-0 shadow-sm p-3">
+      <div class="d-flex align-items-center justify-content-between">
+        <div>
+          <div class="small opacity-75 text-uppercase fw-semibold">Today's Total</div>
+          <h3 class="fw-bold mb-0">₹<%- parseFloat(summary.todayTotal || 0).toLocaleString('en-IN') %></h3>
+        </div>
+        <i class="fa-solid fa-calendar-day fa-2x opacity-50"></i>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Filter Bar -->
+<div class="card shadow-sm border-0 mb-4">
+  <div class="card-body">
+    <form method="GET" action="/admin/fees/history" class="row g-3 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label fw-semibold small">Search Student / Receipt</label>
+        <div class="input-group">
+          <span class="input-group-text bg-white"><i class="fa-solid fa-magnifying-glass text-muted"></i></span>
+          <input type="text" name="search" class="form-control" placeholder="Name, Adm No, Receipt..." value="<%- search || '' %>">
+        </div>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label fw-semibold small">Filter by Class</label>
+        <select name="class_id" class="form-select">
+          <option value="">-- All Classes --</option>
+          <% classes.forEach(c => { %>
+            <option value="<%- c.id %>" <%- String(class_id) === String(c.id) ? 'selected' : '' %>>
+              <%- c.name %> - <%- c.section %>
+            </option>
+          <% }) %>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label fw-semibold small">From Date</label>
+        <input type="date" name="from_date" class="form-control" value="<%- from_date || '' %>">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label fw-semibold small">To Date</label>
+        <input type="date" name="to_date" class="form-control" value="<%- to_date || '' %>">
+      </div>
+      <div class="col-md-2 d-flex gap-2">
+        <button type="submit" class="btn btn-primary flex-grow-1">
+          <i class="fa-solid fa-filter me-1"></i>Filter
+        </button>
+        <a href="/admin/fees/history" class="btn btn-outline-secondary" title="Reset Filters">
+          <i class="fa-solid fa-rotate"></i>
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- History Transactions Table -->
+<div class="card shadow-sm border-0">
+  <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+    <h6 class="fw-bold mb-0">
+      <i class="fa-solid fa-list-numeric text-primary me-2"></i>Payment Transactions (<%- payments.length %>)
+    </h6>
+    <span class="text-muted small">Showing latest payments first</span>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-dark">
+          <tr>
+            <th style="width: 130px;">Receipt No</th>
+            <th style="width: 105px;">Date</th>
+            <th>Student Name</th>
+            <th>Adm No / Roll</th>
+            <th>Class</th>
+            <th>Particulars / Months</th>
+            <th class="text-end" style="width: 120px;">Amount Paid</th>
+            <th style="width: 90px;">Mode</th>
+            <th>Collected By</th>
+            <th class="text-end" style="width: 110px;">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if(payments.length > 0) { %>
+            <% payments.forEach(p => { %>
+              <tr>
+                <td>
+                  <span class="badge bg-light text-dark border fw-bold font-monospace">
+                    <%- p.receipt_no || ('RCP-' + p.id) %>
+                  </span>
+                </td>
+                <td class="small">
+                  <%- p.payment_date ? new Date(p.payment_date).toLocaleDateString('en-IN') : '-' %>
+                </td>
+                <td>
+                  <strong><%- p.student_name %></strong>
+                  <% if(p.student_phone) { %>
+                    <br><small class="text-muted"><i class="fa-solid fa-phone me-1"></i><%- p.student_phone %></small>
+                  <% } %>
+                </td>
+                <td>
+                  <span class="badge bg-secondary"><%- p.admission_no || '-' %></span>
+                  <% if(p.roll_number != null) { %>
+                    <small class="text-muted ms-1">#<%- p.roll_number %></small>
+                  <% } %>
+                </td>
+                <td>
+                  <%- p.class_name ? (p.class_name + ' - ' + p.class_section) : '<span class="text-muted">N/A</span>' %>
+                </td>
+                <td>
+                  <% if(p.months_paid) { %>
+                    <span class="badge bg-light text-primary border"><%- p.months_paid %></span>
+                  <% } %>
+                  <% if(p.remarks) { %>
+                    <small class="text-muted d-block mt-1"><%- p.remarks %></small>
+                  <% } %>
+                </td>
+                <td class="text-end">
+                  <span class="fw-bold text-success fs-6">₹<%- parseFloat(p.amount_paid || 0).toLocaleString('en-IN') %></span>
+                </td>
+                <td>
+                  <span class="badge <%- (p.payment_mode || '').toLowerCase() === 'cash' ? 'bg-success' : 'bg-info text-dark' %>">
+                    <%- p.payment_mode || 'Cash' %>
+                  </span>
+                </td>
+                <td class="small text-muted">
+                  <%- p.collector_name || 'Admin' %>
+                </td>
+                <td class="text-end">
+                  <a href="/admin/fees/receipt/<%- p.id %>" target="_blank" class="btn btn-sm btn-outline-danger" title="Print Fee Receipt">
+                    <i class="fa-solid fa-print me-1"></i>Receipt
+                  </a>
+                </td>
+              </tr>
+            <% }) %>
+          <% } else { %>
+            <tr>
+              <td colspan="10" class="text-center py-5 text-muted">
+                <i class="fa-solid fa-folder-open fa-2x mb-2 d-block opacity-50"></i>
+                No fee payment records found matching your filter criteria.
+              </td>
+            </tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

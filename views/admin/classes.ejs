@@ -32,7 +32,7 @@
       <div class="card-body p-0">
         <div class="table-responsive">
           <table class="table table-hover align-middle mb-0">
-            <thead class="table-dark"><tr><th>#</th><th>Class</th><th>Section</th><th>Class Teacher</th><th>Students</th><th>Year</th><th>Action</th></tr></thead>
+            <thead class="table-dark"><tr><th>#</th><th>Class</th><th>Section</th><th style="min-width: 180px;">Class Teacher</th><th>Students</th><th>Year</th><th class="text-end" style="min-width: 130px;">Actions</th></tr></thead>
             <tbody>
               <% if(classes.length > 0) { %>
                 <% classes.forEach((c, i) => { %>
@@ -40,13 +40,29 @@
                   <td><%- i+1 %></td>
                   <td><strong><%- c.name %></strong></td>
                   <td><span class="badge bg-warning text-dark"><%- c.section %></span></td>
-                  <td><%- c.teacher_name || '<span class="text-muted">Not assigned</span>' %></td>
+                  <td>
+                    <form action="/admin/classes/assign-teacher/<%- c.id %>" method="POST" class="m-0">
+                      <select name="teacher_id" class="form-select form-select-sm" onchange="this.form.submit()" title="Click to assign class teacher directly">
+                        <option value="">-- Not Assigned --</option>
+                        <% teachers.forEach(t => { %>
+                          <option value="<%- t.id %>" <%- (c.teacher_id == t.id) ? 'selected' : '' %>>
+                            <%- t.name %>
+                          </option>
+                        <% }) %>
+                      </select>
+                    </form>
+                  </td>
                   <td><span class="badge bg-primary"><%- c.student_count %></span></td>
                   <td><%- c.academic_year %></td>
-                  <td>
-                    <form action="/admin/classes/delete/<%- c.id %>" method="POST" onsubmit="return confirm('Delete class?')">
-                      <button class="btn btn-sm btn-outline-danger"><i class="fa-solid fa-trash"></i></button>
-                    </form>
+                  <td class="text-end">
+                    <div class="d-inline-flex gap-1">
+                      <a href="/admin/classes/student-list?class_id=<%- c.id %>" class="btn btn-sm btn-outline-primary" title="Download & View Class Student List">
+                        <i class="fa-solid fa-list-check me-1"></i>List
+                      </a>
+                      <form action="/admin/classes/delete/<%- c.id %>" method="POST" onsubmit="return confirm('Delete class: <%- c.name %> - <%- c.section %>?')" class="d-inline">
+                        <button class="btn btn-sm btn-outline-danger" title="Delete Class"><i class="fa-solid fa-trash"></i></button>
+                      </form>
+                    </div>
                   </td>
                 </tr>
                 <% }) %>

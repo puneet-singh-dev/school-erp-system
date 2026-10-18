@@ -31,4 +31,4 @@ services:
       - key: SCHOOL_PHONE
         value: "9129914501"
       - key: DEVELOPED_BY
-        value: "Developed by Er. Puneet"
+        value: "Puneet Singh"

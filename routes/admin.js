@@ -11,6 +11,7 @@ const multer = require('multer');
 const { generateFeeReceiptPDF } = require('../utils/receiptPdf');
 const { generateClassMarksPDF } = require('../utils/marksheetPdf');
 const { generateClassFeeRemindersHindiPDF } = require('../utils/feeReminderHindiPdf');
+const { generateClassStudentListPDF } = require('../utils/classListPdf');
 
 // Configure Multer for student profile photo uploads
 const uploadDir = path.join(__dirname, '../public/uploads/students');
@@ -114,17 +115,47 @@ router.get('/', async (req, res) => {
       attendanceData = att || [];
     } catch (e) { console.error('Dashboard attendance error:', e.message); }
 
-    // 7. Fee collection last 6 months (Compatible with sql_mode=only_full_group_by)
+    // 7. Fee collection last 6 months (Always populates all 6 months so chart is never blank)
     try {
       const [feeM] = await db.query(`
-        SELECT DATE_FORMAT(MIN(payment_date),'%b %Y') as month, COALESCE(SUM(amount_paid), 0) as total
+        SELECT DATE_FORMAT(MIN(payment_date),'%b %Y') as month,
+               YEAR(payment_date) as yr,
+               MONTH(payment_date) as mo,
+               COALESCE(SUM(amount_paid), 0) as total
         FROM fee_payments 
         WHERE payment_date >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
         GROUP BY YEAR(payment_date), MONTH(payment_date) 
         ORDER BY YEAR(payment_date) ASC, MONTH(payment_date) ASC
       `);
-      feeMonthly = feeM || [];
-    } catch (e) { console.error('Dashboard fee monthly error:', e.message); }
+
+      const feeMap = {};
+      (feeM || []).forEach(f => {
+        feeMap[`${f.yr}-${f.mo}`] = parseFloat(f.total) || 0;
+      });
+
+      const months = [];
+      const now = new Date();
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const yr = d.getFullYear();
+        const mo = d.getMonth() + 1;
+        const monthLabel = d.toLocaleString('en-US', { month: 'short' }) + ' ' + yr;
+        const total = feeMap[`${yr}-${mo}`] || 0;
+        months.push({ month: monthLabel, total });
+      }
+      feeMonthly = months;
+    } catch (e) {
+      console.error('Dashboard fee monthly error:', e.message);
+      const now = new Date();
+      feeMonthly = [];
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        feeMonthly.push({
+          month: d.toLocaleString('en-US', { month: 'short' }) + ' ' + d.getFullYear(),
+          total: 0
+        });
+      }
+    }
 
     // 8. Recent students
     try {
@@ -432,6 +463,96 @@ router.post('/classes/delete/:id', async (req, res) => {
   await db.query('DELETE FROM classes WHERE id=?', [req.params.id]);
   req.flash('success_msg', 'Class deleted');
   res.redirect('/admin/classes');
+});
+
+router.post('/classes/assign-teacher/:id', async (req, res) => {
+  const { teacher_id } = req.body;
+  const validTeacherId = teacher_id && parseInt(teacher_id) ? parseInt(teacher_id) : null;
+  try {
+    await db.query('UPDATE classes SET teacher_id = ? WHERE id = ?', [validTeacherId, req.params.id]);
+    req.flash('success_msg', 'Class teacher assigned successfully!');
+  } catch (err) {
+    console.error('Assign teacher error:', err);
+    req.flash('error_msg', 'Failed to assign class teacher: ' + err.message);
+  }
+  res.redirect('/admin/classes');
+});
+
+// Class Student List / Roll Sheet
+router.get('/classes/student-list', async (req, res) => {
+  try {
+    const [classes] = await db.query(`
+      SELECT c.*, u.name as teacher_name,
+             (SELECT COUNT(*) FROM students s WHERE s.class_id = c.id) as student_count
+      FROM classes c
+      LEFT JOIN users u ON c.teacher_id = u.id
+      ORDER BY c.name, c.section
+    `);
+
+    let selectedClass = null;
+    let students = [];
+
+    const classId = req.query.class_id ? parseInt(req.query.class_id) : (classes.length ? classes[0].id : null);
+
+    if (classId) {
+      selectedClass = classes.find(c => c.id === classId) || null;
+      if (selectedClass) {
+        const [studs] = await db.query(`
+          SELECT s.*, u.name, u.email, u.phone, u.profile_photo, u.is_active,
+                 c.name as class_name, c.section as class_section
+          FROM students s
+          JOIN users u ON s.user_id = u.id
+          LEFT JOIN classes c ON s.class_id = c.id
+          WHERE s.class_id = ?
+          ORDER BY (s.roll_number IS NULL), s.roll_number ASC, u.name ASC
+        `, [classId]);
+        students = studs || [];
+      }
+    }
+
+    res.render('admin/class-student-list', {
+      title: 'Class Student List',
+      classes,
+      selectedClass,
+      students
+    });
+  } catch (err) {
+    console.error('Class student list error:', err);
+    req.flash('error_msg', 'Error loading class student list: ' + err.message);
+    res.redirect('/admin/classes');
+  }
+});
+
+// Class Student List Downloadable Official PDF
+router.get('/classes/student-list-pdf/:classId', async (req, res) => {
+  try {
+    const classId = parseInt(req.params.classId);
+    const [classRows] = await db.query(`
+      SELECT c.*, u.name as teacher_name
+      FROM classes c
+      LEFT JOIN users u ON c.teacher_id = u.id
+      WHERE c.id = ?
+    `, [classId]);
+
+    if (!classRows.length) {
+      req.flash('error_msg', 'Class not found');
+      return res.redirect('/admin/classes/student-list');
+    }
+
+    const selectedClass = classRows[0];
+    const [students] = await db.query(`
+      SELECT s.*, u.name, u.email, u.phone, u.profile_photo
+      FROM students s
+      JOIN users u ON s.user_id = u.id
+      WHERE s.class_id = ?
+      ORDER BY (s.roll_number IS NULL), s.roll_number ASC, u.name ASC
+    `, [classId]);
+
+    generateClassStudentListPDF(res, selectedClass, students);
+  } catch (err) {
+    console.error('Error generating class student list PDF:', err);
+    res.status(500).send('Error generating student list PDF: ' + err.message);
+  }
 });
 
 // ==================== SUBJECTS ====================
@@ -894,6 +1015,88 @@ router.get('/fees/pending', async (req, res) => {
       ORDER BY balance DESC`, [class_id]);
   }
   res.render('admin/fee-pending', { title: 'Pending Fees', classes, pendingFees, class_id });
+});
+
+// Fee Payment History Ledger
+router.get('/fees/history', async (req, res) => {
+  try {
+    const { class_id, from_date, to_date, search } = req.query;
+    const [classes] = await db.query('SELECT * FROM classes ORDER BY name, section');
+
+    let query = `
+      SELECT fp.*, 
+             s.admission_no, s.roll_number,
+             u.name as student_name, u.phone as student_phone,
+             c.name as class_name, c.section as class_section,
+             collector.name as collector_name
+      FROM fee_payments fp
+      JOIN students s ON fp.student_id = s.id
+      JOIN users u ON s.user_id = u.id
+      LEFT JOIN classes c ON s.class_id = c.id
+      LEFT JOIN users collector ON fp.collected_by = collector.id
+      WHERE 1=1
+    `;
+    const params = [];
+
+    if (class_id) {
+      query += ` AND s.class_id = ?`;
+      params.push(class_id);
+    }
+    if (from_date) {
+      query += ` AND fp.payment_date >= ?`;
+      params.push(from_date);
+    }
+    if (to_date) {
+      query += ` AND fp.payment_date <= ?`;
+      params.push(to_date);
+    }
+    if (search && search.trim()) {
+      query += ` AND (u.name LIKE ? OR s.admission_no LIKE ? OR fp.receipt_no LIKE ? OR fp.remarks LIKE ?)`;
+      const term = `%${search.trim()}%`;
+      params.push(term, term, term, term);
+    }
+
+    query += ` ORDER BY fp.payment_date DESC, fp.id DESC`;
+
+    const [payments] = await db.query(query, params);
+
+    // Compute summary metrics based on the filtered payments
+    let filteredTotal = 0;
+    let cashTotal = 0;
+    let todayTotal = 0;
+    const todayStr = new Date().toISOString().slice(0, 10);
+
+    payments.forEach(p => {
+      const amt = parseFloat(p.amount_paid) || 0;
+      filteredTotal += amt;
+      if ((p.payment_mode || '').toLowerCase() === 'cash') {
+        cashTotal += amt;
+      }
+      const pDateStr = p.payment_date ? (p.payment_date instanceof Date ? p.payment_date.toISOString().slice(0, 10) : String(p.payment_date).slice(0, 10)) : '';
+      if (pDateStr === todayStr) {
+        todayTotal += amt;
+      }
+    });
+
+    res.render('admin/fee-history', {
+      title: 'Fee Payment History',
+      classes,
+      payments,
+      class_id: class_id || '',
+      from_date: from_date || '',
+      to_date: to_date || '',
+      search: search || '',
+      summary: {
+        filteredTotal,
+        cashTotal,
+        todayTotal
+      }
+    });
+  } catch (err) {
+    console.error('Fee history error:', err);
+    req.flash('error_msg', 'Error loading fee payment history: ' + err.message);
+    res.redirect('/admin/fees');
+  }
 });
 
 // ==================== RESULTS ====================

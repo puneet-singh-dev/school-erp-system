@@ -37,19 +37,36 @@
 <!-- Charts Row -->
 <div class="row g-4 mb-4">
   <div class="col-lg-8">
-    <div class="card shadow-sm">
+    <div class="card shadow-sm h-100">
       <div class="card-header d-flex justify-content-between align-items-center">
         <h6 class="mb-0 fw-bold"><i class="fa-solid fa-chart-line me-2 text-primary"></i>Fee Collection (Last 6 Months)</h6>
+        <div class="d-flex gap-2">
+          <a href="/admin/fees/history" class="btn btn-sm btn-outline-primary"><i class="fa-solid fa-clock-rotate-left me-1"></i>Fee History</a>
+          <a href="/admin/fees/collect" class="btn btn-sm btn-primary"><i class="fa-solid fa-plus me-1"></i>Collect Fee</a>
+        </div>
       </div>
-      <div class="card-body"><canvas id="feeChart" height="100"></canvas></div>
+      <div class="card-body">
+        <canvas id="feeChart" height="110"></canvas>
+      </div>
     </div>
   </div>
   <div class="col-lg-4">
-    <div class="card shadow-sm">
-      <div class="card-header">
+    <div class="card shadow-sm h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
         <h6 class="mb-0 fw-bold"><i class="fa-solid fa-chart-pie me-2 text-success"></i>Attendance This Month</h6>
+        <a href="/admin/attendance" class="btn btn-sm btn-outline-success"><i class="fa-solid fa-clipboard-check me-1"></i>Mark</a>
       </div>
-      <div class="card-body d-flex justify-content-center"><canvas id="attChart" height="200"></canvas></div>
+      <div class="card-body d-flex flex-column align-items-center justify-content-center p-3">
+        <div id="attEmptyState" class="text-center py-4 d-none">
+          <div class="text-muted mb-3"><i class="fa-solid fa-clipboard-user fa-3x text-secondary opacity-50"></i></div>
+          <h6 class="fw-semibold text-secondary mb-1">No Attendance Records</h6>
+          <p class="text-muted small mb-3">No student attendance has been marked for this month yet.</p>
+          <a href="/admin/attendance" class="btn btn-sm btn-success"><i class="fa-solid fa-check me-1"></i>Mark Attendance Now</a>
+        </div>
+        <div id="attCanvasWrapper" style="width: 100%; max-width: 260px; height: 210px; position: relative;">
+          <canvas id="attChart"></canvas>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -105,25 +122,81 @@
 </div>
 
 <script>
+// Fee Chart
 const feeData = <%- JSON.stringify(feeMonthly) %>;
 new Chart(document.getElementById('feeChart'), {
   type: 'bar',
   data: {
     labels: feeData.map(d => d.month),
-    datasets: [{ label: 'Fees Collected (₹)', data: feeData.map(d => d.total), backgroundColor: 'rgba(59,130,246,0.7)', borderColor: '#3b82f6', borderWidth: 2, borderRadius: 6 }]
+    datasets: [{
+      label: 'Fees Collected (₹)',
+      data: feeData.map(d => d.total),
+      backgroundColor: 'rgba(59,130,246,0.7)',
+      borderColor: '#2563eb',
+      borderWidth: 1.5,
+      borderRadius: 6
+    }]
   },
-  options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+  options: {
+    responsive: true,
+    maintainAspectRatio: true,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: function(ctx) {
+            return ' ₹ ' + Number(ctx.raw || 0).toLocaleString('en-IN');
+          }
+        }
+      }
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        ticks: {
+          callback: function(val) {
+            return '₹' + Number(val).toLocaleString('en-IN');
+          }
+        }
+      }
+    }
+  }
 });
 
+// Attendance Chart
 const attData = <%- JSON.stringify(attendanceData) %>;
 const attMap = {};
-attData.forEach(a => attMap[a.status] = a.count);
-new Chart(document.getElementById('attChart'), {
-  type: 'doughnut',
-  data: {
-    labels: ['Present', 'Absent', 'Late', 'Leave'],
-    datasets: [{ data: [attMap['Present']||0, attMap['Absent']||0, attMap['Late']||0, attMap['Leave']||0], backgroundColor: ['#22c55e','#ef4444','#f59e0b','#6366f1'], borderWidth: 0 }]
-  },
-  options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+let totalAtt = 0;
+attData.forEach(a => {
+  attMap[a.status] = Number(a.count) || 0;
+  totalAtt += Number(a.count) || 0;
 });
+
+const attCanvasWrapper = document.getElementById('attCanvasWrapper');
+const attEmptyState = document.getElementById('attEmptyState');
+
+if (totalAtt === 0) {
+  attCanvasWrapper.classList.add('d-none');
+  attEmptyState.classList.remove('d-none');
+} else {
+  new Chart(document.getElementById('attChart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Present', 'Absent', 'Late', 'Leave'],
+      datasets: [{
+        data: [attMap['Present']||0, attMap['Absent']||0, attMap['Late']||0, attMap['Leave']||0],
+        backgroundColor: ['#22c55e','#ef4444','#f59e0b','#6366f1'],
+        borderWidth: 2,
+        borderColor: '#ffffff'
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom' }
+      }
+    }
+  });
+}
 </script>

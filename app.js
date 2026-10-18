@@ -50,7 +50,7 @@ app.use((req, res, next) => {
     : 'Shri Amrit Lal Smarak School And College';
   res.locals.schoolAddress = process.env.SCHOOL_ADDRESS || 'Vijay Nagar, Karma Bazar, Prayagraj (U.P)';
   res.locals.schoolPhone = process.env.SCHOOL_PHONE || '9129914501';
-  res.locals.developedBy = process.env.DEVELOPED_BY || 'Er. Puneet Singh';
+  res.locals.developedBy = (process.env.DEVELOPED_BY && process.env.DEVELOPED_BY.replace(/^Developed by\s+/i, '').replace(/^Er\.\s*/i, '').trim()) || 'Puneet Singh';
   next();
 });
 
