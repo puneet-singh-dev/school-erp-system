@@ -1,21 +1,23 @@
 const mysql = require('mysql2/promise');
 require('dotenv').config();
 
-const poolConfig = process.env.DATABASE_URL
+const dbUri = process.env.DATABASE_URL || process.env.MYSQL_URL || process.env.JAWSDB_URL || process.env.CLEARDB_DATABASE_URL;
+
+const poolConfig = dbUri
   ? {
-      uri: process.env.DATABASE_URL,
+      uri: dbUri,
       ssl: process.env.DB_SSL === 'false' ? undefined : { rejectUnauthorized: false },
       waitForConnections: true,
       connectionLimit: 10,
       queueLimit: 0
     }
   : {
-      host: process.env.DB_HOST || 'localhost',
-      port: process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : 3306,
-      user: process.env.DB_USER || 'root',
-      password: process.env.DB_PASSWORD || '',
-      database: process.env.DB_NAME || 'school_erp',
-      ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : undefined,
+      host: process.env.DB_HOST || process.env.MYSQLHOST || 'localhost',
+      port: process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : (process.env.MYSQLPORT ? parseInt(process.env.MYSQLPORT, 10) : 3306),
+      user: process.env.DB_USER || process.env.MYSQLUSER || 'root',
+      password: process.env.DB_PASSWORD !== undefined ? process.env.DB_PASSWORD : (process.env.MYSQLPASSWORD || ''),
+      database: process.env.DB_NAME || process.env.MYSQLDATABASE || 'school_erp',
+      ssl: (process.env.DB_SSL === 'true' || process.env.MYSQL_SSL === 'true') ? { rejectUnauthorized: false } : undefined,
       waitForConnections: true,
       connectionLimit: 10,
       queueLimit: 0
