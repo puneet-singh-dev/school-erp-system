@@ -694,6 +694,25 @@ router.post('/fees/student-balance/:studentId', async (req, res) => {
   res.redirect(`/admin/fees/collect?class_id=${class_id || ''}&student_id=${req.params.studentId}`);
 });
 
+// Configure / Update School Transport Facility for a student
+router.post('/fees/student-transport/:studentId', async (req, res) => {
+  const { uses_transport, transport_route, transport_fee, class_id } = req.body;
+  const cleanUsesTransport = (uses_transport === '1' || uses_transport === 1 || uses_transport === true) ? 1 : 0;
+  const cleanTransportRoute = cleanUsesTransport ? ((transport_route && transport_route.trim()) || null) : null;
+  const cleanTransportFee = cleanUsesTransport ? Math.max(0, parseFloat(transport_fee) || 0) : 0.00;
+  try {
+    await db.query(
+      'UPDATE students SET uses_transport=?, transport_route=?, transport_fee=? WHERE id=?',
+      [cleanUsesTransport, cleanTransportRoute, cleanTransportFee, req.params.studentId]
+    );
+    req.flash('success_msg', 'Transport / Van facility updated successfully!');
+  } catch (err) {
+    console.error('Error updating transport details:', err);
+    req.flash('error_msg', 'Error updating transport details: ' + err.message);
+  }
+  res.redirect(`/admin/fees/collect?class_id=${class_id || ''}&student_id=${req.params.studentId}`);
+});
+
 // Fee Receipt PDF
 // Fee Receipt PDF (A4 split: Left=Student Copy, Right=College Copy, Half=Next Student)
 router.get('/fees/receipt/:id', async (req, res) => {

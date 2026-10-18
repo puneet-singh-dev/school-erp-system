@@ -186,15 +186,16 @@
             <option value="0" <%- !student || !student.uses_transport ? 'selected' : '' %>>No (Own Transport)</option>
             <option value="1" <%- student && student.uses_transport ? 'selected' : '' %>>Yes (School Van)</option>
           </select>
+          <small class="text-muted d-block mt-1">Select Yes if student uses school van.</small>
         </div>
-        <div class="col-md-5 transport-field" style="<%- (!student || !student.uses_transport) ? 'display: none;' : '' %>">
+        <div class="col-md-5">
           <label class="form-label fw-semibold">Pickup / Drop Route or Stop</label>
           <input type="text" name="transport_route" id="transportRouteInput" class="form-control"
             value="<%- student && student.transport_route ? student.transport_route : '' %>"
             placeholder="e.g. Karma Bazar / Vijay Nagar / Route No. 2">
           <small class="text-muted">Specify the stop name or van route number.</small>
         </div>
-        <div class="col-md-4 transport-field" style="<%- (!student || !student.uses_transport) ? 'display: none;' : '' %>">
+        <div class="col-md-4">
           <label class="form-label fw-semibold text-success">Monthly Transport Fee (₹)</label>
           <div class="input-group">
             <span class="input-group-text bg-success text-white">₹</span>
@@ -230,16 +231,33 @@ function previewPhoto(input) {
 
 function toggleTransportFields(val) {
   const isYes = val === '1' || val === 1 || val === true;
-  document.querySelectorAll('.transport-field').forEach(el => {
-    el.style.display = isYes ? 'block' : 'none';
-  });
+  const select = document.getElementById('usesTransportSelect');
+  if (select) select.value = isYes ? '1' : '0';
   if (!isYes) {
     const feeInp = document.getElementById('transportFeeInput');
-    if (feeInp) feeInp.value = '0.00';
-    const routeInp = document.getElementById('transportRouteInput');
-    if (routeInp) routeInp.value = '';
+    if (feeInp && parseFloat(feeInp.value) === 0) feeInp.value = '0.00';
   }
 }
+
+document.addEventListener('DOMContentLoaded', function () {
+  const feeInp = document.getElementById('transportFeeInput');
+  const routeInp = document.getElementById('transportRouteInput');
+  const select = document.getElementById('usesTransportSelect');
+  if (feeInp && select) {
+    feeInp.addEventListener('input', function () {
+      if (parseFloat(this.value) > 0) {
+        select.value = '1';
+      }
+    });
+  }
+  if (routeInp && select) {
+    routeInp.addEventListener('input', function () {
+      if (this.value.trim().length > 0) {
+        select.value = '1';
+      }
+    });
+  }
+});
 
 <% if(!student) { %>
 async function previewAdmNo() {

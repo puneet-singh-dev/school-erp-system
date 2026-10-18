@@ -69,6 +69,10 @@
                   <span class="badge bg-success-subtle text-success border border-success d-block mt-1" style="font-size: 0.7rem;" title="School Van: <%- s.transport_route || 'Standard Route' %>">
                     <i class="fa-solid fa-van-shuttle me-1"></i>Van: ₹<%- parseFloat(s.transport_fee || 0).toFixed(0) %>/mo
                   </span>
+                <% } else { %>
+                  <span class="badge bg-light text-muted border d-block mt-1" style="font-size: 0.68rem;" title="No School Van / Own Transport">
+                    <i class="fa-solid fa-person-walking me-1"></i>No Van
+                  </span>
                 <% } %>
               </td>
               <td>

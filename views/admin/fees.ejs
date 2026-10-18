@@ -16,7 +16,17 @@
               <% classes.forEach(c => { %><option value="<%- c.id %>"><%- c.name %> - <%- c.section %></option><% }) %>
             </select>
           </div>
-          <div class="mb-3"><label class="form-label">Fee Type *</label><input type="text" name="fee_type" class="form-control" placeholder="Tuition Fee, Exam Fee..." required></div>
+          <div class="mb-3">
+            <label class="form-label">Fee Type *</label>
+            <input type="text" name="fee_type" id="feeTypeInput" class="form-control" placeholder="Tuition Fee, Transport Fee, Exam Fee..." required>
+            <div class="mt-1 d-flex flex-wrap gap-1">
+              <button type="button" class="btn btn-xs btn-outline-primary py-0 px-1 small" onclick="document.getElementById('feeTypeInput').value='Tuition Fee'">Tuition Fee</button>
+              <button type="button" class="btn btn-xs btn-outline-success py-0 px-1 small" onclick="document.getElementById('feeTypeInput').value='Transport Fee'">Transport Fee</button>
+              <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-1 small" onclick="document.getElementById('feeTypeInput').value='Exam Fee'">Exam Fee</button>
+              <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-1 small" onclick="document.getElementById('feeTypeInput').value='Admission Fee'">Admission Fee</button>
+              <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-1 small" onclick="document.getElementById('feeTypeInput').value='Annual Fee'">Annual Fee</button>
+            </div>
+          </div>
           <div class="mb-3"><label class="form-label">Amount (₹) *</label><input type="number" name="amount" class="form-control" step="0.01" required></div>
           <div class="mb-3"><label class="form-label">Due Date</label><input type="date" name="due_date" class="form-control"></div>
           <div class="mb-3"><label class="form-label">Academic Year *</label><input type="text" name="academic_year" class="form-control" value="2026-27" required></div>
