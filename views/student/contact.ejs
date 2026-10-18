@@ -1,0 +1,118 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h5 class="fw-bold mb-1"><i class="fa-solid fa-headset text-primary me-2"></i>Contact Administration &amp; Teachers</h5>
+    <small class="text-muted">Direct communication desk for student queries, academic guidance, and office support</small>
+  </div>
+  <a href="/student" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-arrow-left me-1"></i>Back</a>
+</div>
+
+<div class="row g-4">
+  <!-- School Official Contact Card -->
+  <div class="col-lg-5">
+    <div class="card shadow-sm border-0 mb-4">
+      <div class="card-header bg-primary text-white py-3">
+        <h6 class="mb-0 fw-bold"><i class="fa-solid fa-building-columns me-2"></i>School Administration Desk</h6>
+      </div>
+      <div class="card-body p-4">
+        <h6 class="fw-bold text-dark"><%- schoolName %></h6>
+        <p class="text-muted small mb-3">
+          <i class="fa-solid fa-location-dot text-danger me-2"></i>Vijay Nagar, Karma Bazar, Prayagraj (U.P.)
+        </p>
+        <div class="p-3 bg-light rounded border mb-3 small">
+          <div class="mb-2">
+            <i class="fa-solid fa-phone text-success me-2"></i><strong>Main Helpline:</strong> 
+            <a href="tel:9129914501" class="text-decoration-none fw-bold ms-1">9129914501</a>
+          </div>
+          <div class="mb-2">
+            <i class="fa-solid fa-clock text-primary me-2"></i><strong>Office Hours:</strong> Monday – Saturday (8:00 AM – 2:30 PM)
+          </div>
+          <div>
+            <i class="fa-solid fa-envelope text-info me-2"></i><strong>Email:</strong> info@amritlalschool.com
+          </div>
+        </div>
+        <div class="small text-muted">
+          For urgent examination, fee receipts, or transport concerns, parents and students may visit the administrative counter during operating hours.
+        </div>
+      </div>
+    </div>
+
+    <!-- Class Subject Teachers Directory -->
+    <div class="card shadow-sm border-0">
+      <div class="card-header bg-white py-3 border-bottom">
+        <h6 class="mb-0 fw-bold text-dark"><i class="fa-solid fa-chalkboard-user text-success me-2"></i>My Class Teachers</h6>
+      </div>
+      <div class="card-body p-0">
+        <% if(teachers && teachers.length > 0) { %>
+          <div class="list-group list-group-flush">
+            <% teachers.forEach(t => { %>
+              <div class="list-group-item p-3">
+                <div class="d-flex justify-content-between align-items-center">
+                  <div>
+                    <div class="fw-bold text-dark"><%- t.teacher_name %></div>
+                    <small class="text-muted"><i class="fa-solid fa-book text-primary me-1"></i><%- t.subject_name %></small>
+                  </div>
+                  <% if(t.teacher_phone) { %>
+                    <a href="tel:<%- t.teacher_phone %>" class="btn btn-sm btn-outline-success">
+                      <i class="fa-solid fa-phone me-1"></i>Call
+                    </a>
+                  <% } %>
+                </div>
+              </div>
+            <% }) %>
+          </div>
+        <% } else { %>
+          <div class="p-3 text-center text-muted small">No specific subject teachers listed for this class. Contact administration directly.</div>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+  <!-- Send Message Form -->
+  <div class="col-lg-7">
+    <div class="card shadow-sm border-0">
+      <div class="card-header bg-white py-3 border-bottom">
+        <h6 class="mb-0 fw-bold text-dark"><i class="fa-solid fa-paper-plane text-primary me-2"></i>Send an Inquiry or Message</h6>
+      </div>
+      <div class="card-body p-4">
+        <form action="/student/contact" method="POST">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Send Message To *</label>
+            <select name="recipient_type" class="form-select" id="recipientType" onchange="toggleTeacherSelect(this.value)">
+              <option value="admin">School Administration / Principal Office</option>
+              <% if(teachers && teachers.length > 0) { %>
+                <option value="teacher">Class / Subject Teacher</option>
+              <% } %>
+            </select>
+          </div>
+
+          <div class="mb-3 d-none" id="teacherSelectDiv">
+            <label class="form-label fw-semibold">Select Teacher *</label>
+            <select name="target_teacher_id" class="form-select">
+              <% teachers.forEach(t => { %>
+                <option value="<%- t.teacher_id %>"><%- t.teacher_name %> (<%- t.subject_name %>)</option>
+              <% }) %>
+            </select>
+          </div>
+
+          <div class="mb-4">
+            <label class="form-label fw-semibold">Your Message / Query *</label>
+            <textarea name="message" rows="5" class="form-control" placeholder="Write your question, doubt, or message clearly..." required></textarea>
+            <small class="text-muted">Our administrative desk or teacher will respond promptly.</small>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-lg w-100 py-2">
+            <i class="fa-solid fa-paper-plane me-2"></i>Send Message
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function toggleTeacherSelect(val) {
+  const div = document.getElementById('teacherSelectDiv');
+  if (val === 'teacher') div.classList.remove('d-none');
+  else div.classList.add('d-none');
+}
+</script>

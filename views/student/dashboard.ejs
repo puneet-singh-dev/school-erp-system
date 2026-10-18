@@ -1,92 +1,253 @@
 <% if(student) { %>
-<!-- Stat Cards -->
-<div class="row g-4 mb-4">
-  <div class="col-md-3">
-    <div class="stat-card bg-success text-white">
-      <div class="stat-icon"><i class="fa-solid fa-clipboard-check"></i></div>
-      <div><div class="stat-num"><%- attendance ? attendance.present : 0 %></div><div class="stat-label">Present This Month</div></div>
-    </div>
-  </div>
-  <div class="col-md-3">
-    <div class="stat-card bg-danger text-white">
-      <div class="stat-icon"><i class="fa-solid fa-circle-xmark"></i></div>
-      <div><div class="stat-num"><%- attendance ? attendance.absent : 0 %></div><div class="stat-label">Absent This Month</div></div>
-    </div>
-  </div>
-  <div class="col-md-3">
-    <div class="stat-card bg-warning text-dark">
-      <div class="stat-icon"><i class="fa-solid fa-indian-rupee-sign"></i></div>
-      <div><div class="stat-num">₹<%- fees ? parseFloat(fees.total_fees - fees.paid).toFixed(0) : '0' %></div><div class="stat-label">Fee Balance</div></div>
-    </div>
-  </div>
-  <div class="col-md-3">
-    <div class="stat-card bg-primary text-white">
-      <div class="stat-icon"><i class="fa-solid fa-trophy"></i></div>
-      <div><div class="stat-num"><%- recentResults ? recentResults.length : 0 %></div><div class="stat-label">Exams Appeared</div></div>
+<!-- Student Greeting Banner -->
+<div class="card shadow-sm border-0 mb-4 bg-primary text-white overflow-hidden">
+  <div class="card-body p-4 position-relative">
+    <div class="row align-items-center">
+      <div class="col-md-8">
+        <div class="d-flex align-items-center gap-3 mb-2">
+          <img src="<%- student.profile_photo && student.profile_photo !== 'default.png' ? '/uploads/students/' + student.profile_photo : 'https://ui-avatars.com/api/?name=' + encodeURIComponent(student.student_name) + '&size=96&background=ffffff&color=0D8ABC' %>" 
+               alt="<%- student.student_name %>" 
+               class="rounded-circle border border-3 border-white shadow-sm" 
+               style="width: 70px; height: 70px; object-fit: cover;">
+          <div>
+            <h4 class="fw-bold mb-0">Welcome, <%- student.student_name %>!</h4>
+            <div class="opacity-90 small">
+              Admission No: <strong><%- student.admission_no %></strong> &bull; Class: <strong><%- student.class_name %> (<%- student.section %>)</strong> &bull; Roll: <strong><%- student.roll_number || '-' %></strong>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4 text-md-end mt-3 mt-md-0">
+        <a href="/student/profile" class="btn btn-light fw-semibold shadow-sm me-2">
+          <i class="fa-solid fa-id-card me-1"></i>View Full Profile
+        </a>
+      </div>
     </div>
   </div>
 </div>
 
-<div class="row g-4">
-  <!-- Profile Card -->
-  <div class="col-md-4">
-    <div class="card shadow-sm">
-      <div class="card-header bg-primary text-white">
-        <h6 class="mb-0 fw-bold"><i class="fa-solid fa-user me-2"></i>My Profile</h6>
-      </div>
-      <div class="card-body text-center">
-        <div class="profile-avatar mb-3"><%- student.student_name ? student.student_name.charAt(0) : 'S' %></div>
-        <h5 class="fw-bold"><%- student.student_name || user.name %></h5>
-        <span class="badge bg-primary"><%- student.class_name %> - <%- student.section %></span>
-        <div class="mt-3 text-start">
-          <div class="info-row"><span>Admission No</span><strong><%- student.admission_no %></strong></div>
-          <div class="info-row"><span>Roll Number</span><strong><%- student.roll_number || '-' %></strong></div>
-          <div class="info-row"><span>Guardian</span><strong><%- student.guardian_name || '-' %></strong></div>
-        </div>
+<!-- Key Stat Cards -->
+<div class="row g-3 mb-4">
+  <div class="col-xl-3 col-sm-6">
+    <div class="stat-card bg-success text-white">
+      <div class="stat-icon"><i class="fa-solid fa-clipboard-check"></i></div>
+      <div>
+        <div class="stat-num"><%- attendance ? attendance.present : 0 %> Days</div>
+        <div class="stat-label">Present This Month</div>
       </div>
     </div>
   </div>
+  <div class="col-xl-3 col-sm-6">
+    <div class="stat-card bg-danger text-white">
+      <div class="stat-icon"><i class="fa-solid fa-circle-xmark"></i></div>
+      <div>
+        <div class="stat-num"><%- attendance ? attendance.absent : 0 %> Days</div>
+        <div class="stat-label">Absent This Month</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-xl-3 col-sm-6">
+    <div class="stat-card bg-warning text-dark">
+      <div class="stat-icon"><i class="fa-solid fa-indian-rupee-sign"></i></div>
+      <div>
+        <div class="stat-num">₹<%- fees ? parseFloat(Math.max(0, fees.total_fees - fees.paid)).toLocaleString('en-IN') : '0' %></div>
+        <div class="stat-label">Pending Fee Balance</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-xl-3 col-sm-6">
+    <div class="stat-card bg-info text-white">
+      <div class="stat-icon"><i class="fa-solid fa-book-open"></i></div>
+      <div>
+        <div class="stat-num"><%- homeworkCount || 0 %></div>
+        <div class="stat-label">Active Homework</div>
+      </div>
+    </div>
+  </div>
+</div>
 
-  <div class="col-md-5">
-    <!-- Recent Results -->
-    <div class="card shadow-sm mb-3">
-      <div class="card-header d-flex justify-content-between">
-        <h6 class="mb-0 fw-bold"><i class="fa-solid fa-trophy me-1"></i>Recent Results</h6>
-        <a href="/student/results" class="btn btn-sm btn-outline-primary">View All</a>
+<!-- Quick Navigation Action Grid -->
+<h6 class="fw-bold text-dark mb-3"><i class="fa-solid fa-compass text-primary me-2"></i>Student Portal Services</h6>
+<div class="row g-3 mb-4">
+  <div class="col-md-4 col-sm-6">
+    <a href="/student/fees" class="card shadow-sm border-0 text-decoration-none h-100 hover-card p-3">
+      <div class="d-flex align-items-center gap-3">
+        <div class="p-3 bg-warning-subtle text-warning-emphasis rounded-3 fs-4"><i class="fa-solid fa-receipt"></i></div>
+        <div>
+          <h6 class="fw-bold text-dark mb-1">Fees &amp; Receipts</h6>
+          <small class="text-muted">Check pending fee dues and download PDF receipts</small>
+        </div>
+      </div>
+    </a>
+  </div>
+
+  <div class="col-md-4 col-sm-6">
+    <a href="/student/homework" class="card shadow-sm border-0 text-decoration-none h-100 hover-card p-3">
+      <div class="d-flex align-items-center gap-3">
+        <div class="p-3 bg-primary-subtle text-primary rounded-3 fs-4"><i class="fa-solid fa-book-open"></i></div>
+        <div>
+          <h6 class="fw-bold text-dark mb-1">Homework &amp; Tasks</h6>
+          <small class="text-muted">View daily class assignments and due dates</small>
+        </div>
+      </div>
+    </a>
+  </div>
+
+  <div class="col-md-4 col-sm-6">
+    <a href="/student/timetable" class="card shadow-sm border-0 text-decoration-none h-100 hover-card p-3">
+      <div class="d-flex align-items-center gap-3">
+        <div class="p-3 bg-info-subtle text-info rounded-3 fs-4"><i class="fa-solid fa-calendar-week"></i></div>
+        <div>
+          <h6 class="fw-bold text-dark mb-1">Class Timetable</h6>
+          <small class="text-muted">Weekly period schedule from Monday to Saturday</small>
+        </div>
+      </div>
+    </a>
+  </div>
+
+  <div class="col-md-4 col-sm-6">
+    <a href="/student/attendance" class="card shadow-sm border-0 text-decoration-none h-100 hover-card p-3">
+      <div class="d-flex align-items-center gap-3">
+        <div class="p-3 bg-success-subtle text-success rounded-3 fs-4"><i class="fa-solid fa-clipboard-user"></i></div>
+        <div>
+          <h6 class="fw-bold text-dark mb-1">My Attendance</h6>
+          <small class="text-muted">Check monthly attendance records and percentage</small>
+        </div>
+      </div>
+    </a>
+  </div>
+
+  <div class="col-md-4 col-sm-6">
+    <a href="/student/events" class="card shadow-sm border-0 text-decoration-none h-100 hover-card p-3">
+      <div class="d-flex align-items-center gap-3">
+        <div class="p-3 bg-danger-subtle text-danger rounded-3 fs-4"><i class="fa-solid fa-calendar-days"></i></div>
+        <div>
+          <h6 class="fw-bold text-dark mb-1">Holidays &amp; Events</h6>
+          <small class="text-muted">School academic calendar, breaks, and sports meet</small>
+        </div>
+      </div>
+    </a>
+  </div>
+
+  <div class="col-md-4 col-sm-6">
+    <a href="/student/gallery" class="card shadow-sm border-0 text-decoration-none h-100 hover-card p-3">
+      <div class="d-flex align-items-center gap-3">
+        <div class="p-3 bg-secondary-subtle text-secondary rounded-3 fs-4"><i class="fa-solid fa-images"></i></div>
+        <div>
+          <h6 class="fw-bold text-dark mb-1">School Gallery</h6>
+          <small class="text-muted">View and download photos of school events &amp; campus</small>
+        </div>
+      </div>
+    </a>
+  </div>
+
+  <div class="col-md-4 col-sm-6">
+    <a href="/student/leaves" class="card shadow-sm border-0 text-decoration-none h-100 hover-card p-3">
+      <div class="d-flex align-items-center gap-3">
+        <div class="p-3 bg-primary-subtle text-primary rounded-3 fs-4"><i class="fa-solid fa-envelope-open-text"></i></div>
+        <div>
+          <h6 class="fw-bold text-dark mb-1">Leave Application</h6>
+          <small class="text-muted">Apply for leave of absence and track status</small>
+        </div>
+      </div>
+    </a>
+  </div>
+
+  <div class="col-md-4 col-sm-6">
+    <a href="/student/contact-update" class="card shadow-sm border-0 text-decoration-none h-100 hover-card p-3">
+      <div class="d-flex align-items-center gap-3">
+        <div class="p-3 bg-warning-subtle text-warning-emphasis rounded-3 fs-4"><i class="fa-solid fa-user-pen"></i></div>
+        <div>
+          <h6 class="fw-bold text-dark mb-1">Update Contact Info</h6>
+          <small class="text-muted">Submit official phone/address change request</small>
+        </div>
+      </div>
+    </a>
+  </div>
+
+  <div class="col-md-4 col-sm-6">
+    <a href="/student/contact" class="card shadow-sm border-0 text-decoration-none h-100 hover-card p-3">
+      <div class="d-flex align-items-center gap-3">
+        <div class="p-3 bg-info-subtle text-info rounded-3 fs-4"><i class="fa-solid fa-headset"></i></div>
+        <div>
+          <h6 class="fw-bold text-dark mb-1">Contact School</h6>
+          <small class="text-muted">School helpline &amp; teacher inquiry desk</small>
+        </div>
+      </div>
+    </a>
+  </div>
+</div>
+
+<!-- Announcements & Upcoming Events Split -->
+<div class="row g-4">
+  <!-- Recent Announcements -->
+  <div class="col-lg-7">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <h6 class="mb-0 fw-bold text-dark"><i class="fa-solid fa-bullhorn text-warning me-2"></i>Recent Announcements</h6>
+        <a href="/student/notices" class="btn btn-sm btn-outline-primary">View All</a>
       </div>
       <div class="card-body p-0">
-        <table class="table mb-0">
-          <thead class="table-light"><tr><th>Exam</th><th>Obtained</th><th>%</th></tr></thead>
-          <tbody>
-            <% if(recentResults && recentResults.length) { %>
-              <% recentResults.forEach(r => { %>
-              <% const pct = r.max_marks > 0 ? ((r.obtained/r.max_marks)*100).toFixed(1) : 0; %>
-              <tr><td><%- r.exam_name %></td><td><%- r.obtained || 0 %>/<%- r.max_marks || 0 %></td>
-              <td><span class="badge <%- pct>=75?'bg-success':pct>=50?'bg-warning text-dark':'bg-danger'%>"><%- pct %>%</span></td></tr>
-              <% }) %>
-            <% } else { %><tr><td colspan="3" class="text-center text-muted py-3">No results yet</td></tr><% } %>
-          </tbody>
-        </table>
+        <% if(notices && notices.length > 0) { %>
+          <div class="list-group list-group-flush">
+            <% notices.slice(0, 4).forEach(n => { %>
+              <div class="list-group-item p-3">
+                <div class="d-flex justify-content-between align-items-start mb-1">
+                  <div class="fw-bold text-dark"><%- n.title %></div>
+                  <small class="text-muted"><%- new Date(n.created_at).toLocaleDateString('en-IN') %></small>
+                </div>
+                <p class="text-muted small mb-0 text-truncate"><%- n.content %></p>
+              </div>
+            <% }) %>
+          </div>
+        <% } else { %>
+          <p class="text-center text-muted py-4 mb-0">No new announcements at this time.</p>
+        <% } %>
       </div>
     </div>
   </div>
 
-  <!-- Notices -->
-  <div class="col-md-3">
-    <div class="card shadow-sm">
-      <div class="card-header"><h6 class="mb-0 fw-bold"><i class="fa-solid fa-bullhorn me-1"></i>Notices</h6></div>
-      <div class="card-body">
-        <% notices.forEach(n => { %>
-        <div class="mb-2 pb-2 border-bottom">
-          <div class="fw-semibold small"><%- n.title %></div>
-          <small class="text-muted"><%- new Date(n.created_at).toLocaleDateString('en-IN') %></small>
-        </div>
-        <% }) %>
-        <% if(!notices.length) { %><p class="text-center text-muted small">No notices</p><% } %>
+  <!-- Upcoming Holidays & Events -->
+  <div class="col-lg-5">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <h6 class="mb-0 fw-bold text-dark"><i class="fa-solid fa-calendar-check text-success me-2"></i>Upcoming Events</h6>
+        <a href="/student/events" class="btn btn-sm btn-outline-success">Full Calendar</a>
+      </div>
+      <div class="card-body p-0">
+        <% if(upcomingEvents && upcomingEvents.length > 0) { %>
+          <div class="list-group list-group-flush">
+            <% upcomingEvents.forEach(ev => { %>
+              <div class="list-group-item p-3">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <span class="badge <%- ev.event_type==='Holiday'?'bg-danger-subtle text-danger border border-danger':'bg-success-subtle text-success border border-success' %>">
+                    <%- ev.event_type %>
+                  </span>
+                  <small class="text-muted fw-semibold">
+                    <%- new Date(ev.start_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) %>
+                  </small>
+                </div>
+                <div class="fw-semibold text-dark"><%- ev.title %></div>
+              </div>
+            <% }) %>
+          </div>
+        <% } else { %>
+          <p class="text-center text-muted py-4 mb-0">No upcoming events scheduled.</p>
+        <% } %>
       </div>
     </div>
   </div>
 </div>
 <% } else { %>
-<div class="alert alert-warning"><i class="fa-solid fa-exclamation-triangle me-2"></i>Profile not set up yet. Contact admin.</div>
+<div class="alert alert-warning shadow-sm"><i class="fa-solid fa-triangle-exclamation me-2"></i>Student record not found for this account. Please contact administration.</div>
 <% } %>
+
+<style>
+.hover-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.hover-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1) !important;
+}
+</style>

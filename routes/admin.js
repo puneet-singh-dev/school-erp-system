@@ -39,6 +39,33 @@ const upload = multer({
   }
 });
 
+// Configure Multer for gallery uploads
+const galleryUploadDir = path.join(__dirname, '../public/uploads/gallery');
+if (!fs.existsSync(galleryUploadDir)) {
+  fs.mkdirSync(galleryUploadDir, { recursive: true });
+}
+
+const galleryStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, galleryUploadDir),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, `gallery-${unique}${ext}`);
+  }
+});
+
+const uploadGallery = multer({
+  storage: galleryStorage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'));
+    }
+  }
+});
+
 router.use(isAdmin);
 
 // ==================== DASHBOARD ====================
@@ -195,8 +222,14 @@ router.post('/students/add', upload.single('profile_photo'), async (req, res) =>
       roll_number = maxRoll + 1;
     }
 
+    // Auto-generate placeholder email if blank
+    if (!email || email.trim() === '') {
+      email = `${admission_no.toLowerCase()}@school.erp`;
+    }
+
     const profilePhoto = req.file ? req.file.filename : 'default.png';
-    const hashed = await bcrypt.hash(password || 'student123', 10);
+    const studentDefaultPassword = (password && password.trim()) || (phone && phone.trim()) || (emergency_contact && emergency_contact.trim()) || 'student123';
+    const hashed = await bcrypt.hash(studentDefaultPassword, 10);
     const [userResult] = await db.query(
       'INSERT INTO users (name,email,password,role,phone,address,profile_photo) VALUES (?,?,?,?,?,?,?)',
       [name, email, hashed, 'student', phone || null, address || null, profilePhoto]
@@ -516,18 +549,15 @@ router.post('/fees/collect', async (req, res) => {
       });
     }
 
-    // Additional components (ID card, Annual, Diary, Development, Exam, etc.)
-    if (Array.isArray(component_name)) {
-      for (let i = 0; i < component_name.length; i++) {
-        const cName = (component_name[i] || '').trim();
-        const cAmt = parseFloat(component_amount[i]) || 0;
-        if (cName && cAmt > 0) {
-          breakdown.push({ name: cName, amount: cAmt });
-        }
-      }
-    } else if (component_name) {
-      const cName = (component_name || '').trim();
-      const cAmt = parseFloat(component_amount) || 0;
+    // Additional components (Admission Fee, ID card, Annual, Diary, Development, Exam, etc.)
+    const rawCompNames = req.body['component_name[]'] || req.body.component_name || [];
+    const rawCompAmts = req.body['component_amount[]'] || req.body.component_amount || [];
+    const compNames = Array.isArray(rawCompNames) ? rawCompNames : (rawCompNames ? [rawCompNames] : []);
+    const compAmts = Array.isArray(rawCompAmts) ? rawCompAmts : (rawCompAmts ? [rawCompAmts] : []);
+
+    for (let i = 0; i < compNames.length; i++) {
+      const cName = (compNames[i] || '').trim();
+      const cAmt = parseFloat(compAmts[i]) || 0;
       if (cName && cAmt > 0) {
         breakdown.push({ name: cName, amount: cAmt });
       }
@@ -947,6 +977,273 @@ router.post('/notices/delete/:id', async (req, res) => {
   await db.query('DELETE FROM notices WHERE id=?', [req.params.id]);
   req.flash('success_msg', 'Notice deleted');
   res.redirect('/admin/notices');
+});
+
+// ==================== GALLERY ====================
+router.get('/gallery', async (req, res) => {
+  try {
+    const category = req.query.category || '';
+    let query = `SELECT g.*, u.name as uploaded_by_name FROM gallery g LEFT JOIN users u ON g.uploaded_by=u.id`;
+    const params = [];
+    if (category) {
+      query += ` WHERE g.category=?`;
+      params.push(category);
+    }
+    query += ` ORDER BY g.created_at DESC`;
+    const [images] = await db.query(query, params);
+    const [categories] = await db.query(`SELECT DISTINCT category FROM gallery WHERE category IS NOT NULL AND category != ''`);
+
+    res.render('admin/gallery', {
+      title: 'School Photo Gallery',
+      images,
+      categories: categories.map(c => c.category),
+      selectedCategory: category
+    });
+  } catch (err) {
+    console.error('Gallery error:', err);
+    req.flash('error_msg', 'Error loading gallery: ' + err.message);
+    res.redirect('/admin');
+  }
+});
+
+router.post('/gallery/upload', uploadGallery.single('image'), async (req, res) => {
+  try {
+    if (!req.file) {
+      req.flash('error_msg', 'Please select an image file to upload.');
+      return res.redirect('/admin/gallery');
+    }
+    const { title, description, category } = req.body;
+    const finalCategory = (category && category.trim()) ? category.trim() : 'General';
+    await db.query(
+      `INSERT INTO gallery (title, description, category, image_path, uploaded_by) VALUES (?, ?, ?, ?, ?)`,
+      [title || 'Campus Photo', description || '', finalCategory, req.file.filename, req.session.user.id]
+    );
+    req.flash('success_msg', 'Photo uploaded to school gallery successfully!');
+    res.redirect('/admin/gallery');
+  } catch (err) {
+    console.error('Upload error:', err);
+    req.flash('error_msg', 'Error uploading image: ' + err.message);
+    res.redirect('/admin/gallery');
+  }
+});
+
+router.post('/gallery/delete/:id', async (req, res) => {
+  try {
+    const [[img]] = await db.query('SELECT * FROM gallery WHERE id=?', [req.params.id]);
+    if (img) {
+      const filePath = path.join(galleryUploadDir, img.image_path);
+      if (fs.existsSync(filePath)) {
+        try { fs.unlinkSync(filePath); } catch (e) {}
+      }
+      await db.query('DELETE FROM gallery WHERE id=?', [req.params.id]);
+      req.flash('success_msg', 'Photo deleted from gallery.');
+    }
+    res.redirect('/admin/gallery');
+  } catch (err) {
+    console.error('Delete error:', err);
+    req.flash('error_msg', 'Error deleting photo: ' + err.message);
+    res.redirect('/admin/gallery');
+  }
+});
+
+// ==================== LEAVE APPLICATIONS ====================
+router.get('/leaves', async (req, res) => {
+  try {
+    const status = req.query.status || '';
+    let query = `
+      SELECT la.*, u.name as student_name, s.admission_no, s.roll_number, c.name as class_name, c.section,
+             reviewer.name as reviewed_by_name
+      FROM leave_applications la
+      JOIN students s ON la.student_id=s.id
+      JOIN users u ON s.user_id=u.id
+      LEFT JOIN classes c ON s.class_id=c.id
+      LEFT JOIN users reviewer ON la.reviewed_by=reviewer.id
+    `;
+    const params = [];
+    if (status) {
+      query += ` WHERE la.status=?`;
+      params.push(status);
+    }
+    query += ` ORDER BY la.created_at DESC`;
+    const [leaves] = await db.query(query, params);
+
+    res.render('admin/leaves', {
+      title: 'Student Leave Applications',
+      leaves,
+      selectedStatus: status
+    });
+  } catch (err) {
+    console.error('Leaves error:', err);
+    req.flash('error_msg', 'Error loading leaves: ' + err.message);
+    res.redirect('/admin');
+  }
+});
+
+router.post('/leaves/:id/approve', async (req, res) => {
+  try {
+    const remarks = req.body.admin_remarks || 'Approved by Administration';
+    await db.query(
+      `UPDATE leave_applications SET status='Approved', reviewed_by=?, admin_remarks=? WHERE id=?`,
+      [req.session.user.id, remarks, req.params.id]
+    );
+    req.flash('success_msg', 'Leave application approved.');
+    res.redirect('/admin/leaves');
+  } catch (err) {
+    req.flash('error_msg', 'Error updating leave: ' + err.message);
+    res.redirect('/admin/leaves');
+  }
+});
+
+router.post('/leaves/:id/reject', async (req, res) => {
+  try {
+    const remarks = req.body.admin_remarks || 'Rejected by Administration';
+    await db.query(
+      `UPDATE leave_applications SET status='Rejected', reviewed_by=?, admin_remarks=? WHERE id=?`,
+      [req.session.user.id, remarks, req.params.id]
+    );
+    req.flash('success_msg', 'Leave application rejected.');
+    res.redirect('/admin/leaves');
+  } catch (err) {
+    req.flash('error_msg', 'Error updating leave: ' + err.message);
+    res.redirect('/admin/leaves');
+  }
+});
+
+// ==================== CONTACT UPDATE REQUESTS ====================
+router.get('/contact-requests', async (req, res) => {
+  try {
+    const [requests] = await db.query(`
+      SELECT cr.*, u.name as student_name, u.phone as current_phone, u.address as current_address,
+             s.emergency_contact as current_emergency, s.admission_no, c.name as class_name, c.section,
+             rev.name as reviewer_name
+      FROM contact_requests cr
+      JOIN students s ON cr.student_id=s.id
+      JOIN users u ON s.user_id=u.id
+      LEFT JOIN classes c ON s.class_id=c.id
+      LEFT JOIN users rev ON cr.reviewed_by=rev.id
+      ORDER BY cr.created_at DESC
+    `);
+    res.render('admin/contact-requests', {
+      title: 'Student Contact Update Requests',
+      requests
+    });
+  } catch (err) {
+    console.error('Contact requests error:', err);
+    req.flash('error_msg', 'Error loading requests: ' + err.message);
+    res.redirect('/admin');
+  }
+});
+
+router.post('/contact-requests/:id/approve', async (req, res) => {
+  try {
+    const [[cr]] = await db.query('SELECT * FROM contact_requests WHERE id=?', [req.params.id]);
+    if (!cr) {
+      req.flash('error_msg', 'Request not found');
+      return res.redirect('/admin/contact-requests');
+    }
+
+    const [[student]] = await db.query('SELECT user_id FROM students WHERE id=?', [cr.student_id]);
+    if (student) {
+      // Update users phone/address
+      if (cr.new_phone) {
+        await db.query('UPDATE users SET phone=? WHERE id=?', [cr.new_phone, student.user_id]);
+      }
+      if (cr.new_address) {
+        await db.query('UPDATE users SET address=? WHERE id=?', [cr.new_address, student.user_id]);
+      }
+      if (cr.new_emergency_contact) {
+        await db.query('UPDATE students SET emergency_contact=? WHERE id=?', [cr.new_emergency_contact, cr.student_id]);
+      }
+    }
+
+    await db.query(
+      `UPDATE contact_requests SET status='Approved', reviewed_by=?, admin_notes=? WHERE id=?`,
+      [req.session.user.id, req.body.admin_notes || 'Approved and contact information updated.', req.params.id]
+    );
+
+    req.flash('success_msg', 'Contact information update approved and applied!');
+    res.redirect('/admin/contact-requests');
+  } catch (err) {
+    console.error(err);
+    req.flash('error_msg', 'Error approving request: ' + err.message);
+    res.redirect('/admin/contact-requests');
+  }
+});
+
+router.post('/contact-requests/:id/reject', async (req, res) => {
+  try {
+    await db.query(
+      `UPDATE contact_requests SET status='Rejected', reviewed_by=?, admin_notes=? WHERE id=?`,
+      [req.session.user.id, req.body.admin_notes || 'Rejected by administration.', req.params.id]
+    );
+    req.flash('success_msg', 'Contact information request rejected.');
+    res.redirect('/admin/contact-requests');
+  } catch (err) {
+    req.flash('error_msg', 'Error rejecting request: ' + err.message);
+    res.redirect('/admin/contact-requests');
+  }
+});
+
+// ==================== HOMEWORK MANAGEMENT ====================
+router.get('/homework', async (req, res) => {
+  try {
+    const classId = parseInt(req.query.class_id, 10) || null;
+    let query = `
+      SELECT h.*, c.name as class_name, c.section, sub.name as subject_name, u.name as teacher_name
+      FROM homework h
+      JOIN classes c ON h.class_id=c.id
+      LEFT JOIN subjects sub ON h.subject_id=sub.id
+      LEFT JOIN users u ON h.assigned_by=u.id
+    `;
+    const params = [];
+    if (classId) {
+      query += ` WHERE h.class_id=?`;
+      params.push(classId);
+    }
+    query += ` ORDER BY h.due_date DESC, h.created_at DESC`;
+    const [homeworkList] = await db.query(query, params);
+    const [classes] = await db.query('SELECT * FROM classes ORDER BY name, section');
+    const [subjects] = await db.query('SELECT * FROM subjects ORDER BY name');
+
+    res.render('admin/homework', {
+      title: 'Homework & Assignments',
+      homeworkList,
+      classes,
+      subjects,
+      classId
+    });
+  } catch (err) {
+    console.error('Homework error:', err);
+    req.flash('error_msg', 'Error loading homework: ' + err.message);
+    res.redirect('/admin');
+  }
+});
+
+router.post('/homework/add', async (req, res) => {
+  try {
+    const { class_id, subject_id, title, description, assigned_date, due_date } = req.body;
+    await db.query(
+      `INSERT INTO homework (class_id, subject_id, title, description, assigned_date, due_date, assigned_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [class_id, subject_id || null, title, description, assigned_date || new Date().toISOString().split('T')[0], due_date, req.session.user.id]
+    );
+    req.flash('success_msg', 'Homework assignment posted successfully!');
+    res.redirect(`/admin/homework?class_id=${class_id}`);
+  } catch (err) {
+    req.flash('error_msg', 'Error posting homework: ' + err.message);
+    res.redirect('/admin/homework');
+  }
+});
+
+router.post('/homework/delete/:id', async (req, res) => {
+  try {
+    await db.query('DELETE FROM homework WHERE id=?', [req.params.id]);
+    req.flash('success_msg', 'Homework assignment deleted.');
+    res.redirect('/admin/homework');
+  } catch (err) {
+    req.flash('error_msg', 'Error deleting homework: ' + err.message);
+    res.redirect('/admin/homework');
+  }
 });
 
 module.exports = router;

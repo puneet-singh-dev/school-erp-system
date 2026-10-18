@@ -1,0 +1,61 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h5 class="fw-bold mb-1"><i class="fa-solid fa-calendar-days text-success me-2"></i>School Calendar &amp; Holidays</h5>
+    <small class="text-muted">Academic events, gazetted holidays, sports meets, and examinations &bull; Session 2026-27</small>
+  </div>
+  <a href="/student" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-arrow-left me-1"></i>Back</a>
+</div>
+
+<div class="row g-4">
+  <div class="col-12">
+    <% if(events && events.length > 0) { %>
+      <div class="row g-3">
+        <% events.forEach(ev => { %>
+          <% 
+            const isHoliday = ev.event_type === 'Holiday';
+            const isExam = ev.event_type === 'Exam';
+            const isUpcoming = new Date(ev.start_date) >= new Date();
+          %>
+          <div class="col-md-6 col-lg-4">
+            <div class="card h-100 shadow-sm border-0 border-top border-4 <%- isHoliday ? 'border-danger' : (isExam ? 'border-warning' : 'border-success') %>">
+              <div class="card-body p-4 d-flex flex-column">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                  <span class="badge <%- isHoliday ? 'bg-danger-subtle text-danger border border-danger' : (isExam ? 'bg-warning-subtle text-warning-emphasis border border-warning' : 'bg-success-subtle text-success border border-success') %>">
+                    <%- ev.event_type %>
+                  </span>
+                  <% if(isUpcoming) { %>
+                    <span class="badge bg-light text-dark border">Upcoming</span>
+                  <% } else { %>
+                    <span class="badge bg-light text-muted">Past</span>
+                  <% } %>
+                </div>
+
+                <h6 class="fw-bold text-dark mb-2"><%- ev.title %></h6>
+                <p class="text-muted small mb-3 flex-grow-1"><%- ev.description || 'Official school event scheduled.' %></p>
+
+                <div class="pt-3 border-top small">
+                  <div class="d-flex align-items-center text-dark fw-semibold">
+                    <i class="fa-regular fa-calendar-check text-primary me-2"></i>
+                    <%- new Date(ev.start_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) %>
+                    <% if(ev.end_date && ev.end_date !== ev.start_date) { %>
+                      <span class="mx-1">to</span>
+                      <%- new Date(ev.end_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) %>
+                    <% } %>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        <% }) %>
+      </div>
+    <% } else { %>
+      <div class="card shadow-sm border-0 text-center py-5">
+        <div class="card-body">
+          <i class="fa-solid fa-calendar-xmark text-muted fs-1 mb-3 opacity-50"></i>
+          <h5 class="fw-bold text-muted">No events scheduled</h5>
+          <p class="text-muted small">Upcoming calendar events will be displayed here.</p>
+        </div>
+      </div>
+    <% } %>
+  </div>
+</div>

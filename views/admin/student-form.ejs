@@ -36,17 +36,17 @@
           <input type="text" name="name" class="form-control" value="<%- student ? student.name : '' %>" required>
         </div>
         <div class="col-md-4">
-          <label class="form-label">Email *</label>
-          <input type="email" name="email" class="form-control" value="<%- student ? student.email : '' %>" required>
+          <label class="form-label">Email <small class="text-muted">(Optional)</small></label>
+          <input type="email" name="email" class="form-control" value="<%- student ? student.email : '' %>" placeholder="Optional (auto-generated if empty)">
         </div>
         <div class="col-md-4">
-          <label class="form-label">Phone</label>
-          <input type="text" name="phone" class="form-control" value="<%- student ? student.phone : '' %>" placeholder="10-digit mobile number">
+          <label class="form-label">Registered Mobile Phone *</label>
+          <input type="text" name="phone" class="form-control" value="<%- student ? student.phone : '' %>" placeholder="10-digit mobile number (used as login password)">
         </div>
         <% if(!student) { %>
         <div class="col-md-4">
-          <label class="form-label">Password <small class="text-muted">(default: student123)</small></label>
-          <input type="password" name="password" class="form-control" placeholder="Leave blank for default">
+          <label class="form-label">Password <small class="text-muted">(default: Mobile No)</small></label>
+          <input type="password" name="password" class="form-control" placeholder="Leave blank to use Mobile No">
         </div>
         <% } %>
         <div class="col-md-4">

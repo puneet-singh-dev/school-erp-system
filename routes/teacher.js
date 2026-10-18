@@ -133,4 +133,77 @@ router.get('/attendance/report', async (req, res) => {
   res.render('teacher/attendance-report', { title: 'Attendance Report', classes, report, class_id, month: month || new Date().getMonth()+1, year: year || new Date().getFullYear(), selectedClass });
 });
 
+// ==================== HOMEWORK ====================
+router.get('/homework', async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const [classes] = await db.query('SELECT * FROM classes WHERE teacher_id=? ORDER BY name', [userId]);
+    const [mySubjects] = await db.query('SELECT * FROM subjects WHERE teacher_id=? ORDER BY name', [userId]);
+    
+    // Get homework assigned by this teacher or for their classes
+    const [homeworkList] = await db.query(`
+      SELECT h.*, c.name as class_name, c.section, sub.name as subject_name
+      FROM homework h
+      JOIN classes c ON h.class_id=c.id
+      LEFT JOIN subjects sub ON h.subject_id=sub.id
+      WHERE h.assigned_by=? OR c.teacher_id=?
+      ORDER BY h.due_date DESC, h.created_at DESC
+    `, [userId, userId]);
+
+    res.render('teacher/homework', {
+      title: 'Homework & Assignments',
+      homeworkList,
+      classes,
+      mySubjects
+    });
+  } catch (err) {
+    console.error('Teacher homework error:', err);
+    req.flash('error_msg', 'Error loading homework: ' + err.message);
+    res.redirect('/teacher');
+  }
+});
+
+router.post('/homework/add', async (req, res) => {
+  try {
+    const { class_id, subject_id, title, description, assigned_date, due_date } = req.body;
+    await db.query(
+      `INSERT INTO homework (class_id, subject_id, title, description, assigned_date, due_date, assigned_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [class_id, subject_id || null, title, description, assigned_date || new Date().toISOString().split('T')[0], due_date, req.session.user.id]
+    );
+    req.flash('success_msg', 'Homework assignment posted successfully!');
+    res.redirect('/teacher/homework');
+  } catch (err) {
+    req.flash('error_msg', 'Error posting homework: ' + err.message);
+    res.redirect('/teacher/homework');
+  }
+});
+
+// ==================== GALLERY ====================
+router.get('/gallery', async (req, res) => {
+  try {
+    const category = req.query.category || '';
+    let query = `SELECT * FROM gallery`;
+    const params = [];
+    if (category) {
+      query += ` WHERE category=?`;
+      params.push(category);
+    }
+    query += ` ORDER BY created_at DESC`;
+    const [images] = await db.query(query, params);
+    const [categories] = await db.query(`SELECT DISTINCT category FROM gallery WHERE category IS NOT NULL AND category != ''`);
+
+    res.render('teacher/gallery', {
+      title: 'School Photo Gallery',
+      images,
+      categories: categories.map(c => c.category),
+      selectedCategory: category
+    });
+  } catch (err) {
+    console.error('Teacher gallery error:', err);
+    req.flash('error_msg', 'Error loading gallery: ' + err.message);
+    res.redirect('/teacher');
+  }
+});
+
 module.exports = router;

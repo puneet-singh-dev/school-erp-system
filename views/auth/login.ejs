@@ -15,14 +15,17 @@
 
     <form action="/login" method="POST">
       <div class="mb-3">
-        <label class="form-label fw-semibold"><i class="fa-solid fa-envelope me-1"></i> Email Address</label>
-        <input type="email" name="email" class="form-control form-control-lg" placeholder="Enter your email" required autofocus>
+        <label class="form-label fw-semibold"><i class="fa-solid fa-user me-1"></i> Email or Admission Number</label>
+        <input type="text" name="email" class="form-control form-control-lg" placeholder="Email or Student Admission No (e.g. ADM2601)" required autofocus>
       </div>
       <div class="mb-4">
-        <label class="form-label fw-semibold"><i class="fa-solid fa-lock me-1"></i> Password</label>
+        <label class="form-label fw-semibold"><i class="fa-solid fa-lock me-1"></i> Password / Reg. Mobile No</label>
         <div class="input-group">
-          <input type="password" name="password" id="passwordInput" class="form-control form-control-lg" placeholder="Enter your password" required>
+          <input type="password" name="password" id="passwordInput" class="form-control form-control-lg" placeholder="Enter password (Reg. Mobile No for students)" required>
           <button class="btn btn-outline-secondary" type="button" onclick="togglePass()"><i class="fa-solid fa-eye" id="eyeIcon"></i></button>
+        </div>
+        <div class="small text-muted mt-2">
+          <i class="fa-solid fa-circle-info text-primary me-1"></i>Students can login with their <strong>Admission Number</strong> and <strong>Registered Mobile Number</strong>. No email required!
         </div>
       </div>
       <button type="submit" class="btn btn-primary btn-lg w-100">
@@ -32,8 +35,9 @@
 
     <div class="mt-4 p-3 bg-light rounded">
       <small class="text-muted">
-        <strong>Demo Credentials:</strong><br>
-        Admin: admin@school.com / admin123
+        <strong>Login Help:</strong><br>
+        &bull; <strong>Admin:</strong> admin@school.com / admin123<br>
+        &bull; <strong>Students:</strong> Admission No (e.g. ADM2601) &amp; Mobile No
       </small>
     </div>
   </div>

@@ -32,9 +32,12 @@
         <li><a href="/admin/teachers"><i class="fa-solid fa-chalkboard-user"></i> Teachers</a></li>
         <li><a href="/admin/classes"><i class="fa-solid fa-door-open"></i> Classes</a></li>
         <li><a href="/admin/subjects"><i class="fa-solid fa-book"></i> Subjects</a></li>
+        <li><a href="/admin/homework"><i class="fa-solid fa-book-open"></i> Homework</a></li>
         <li class="nav-header">Operations</li>
         <li><a href="/admin/attendance"><i class="fa-solid fa-clipboard-check"></i> Attendance</a></li>
         <li><a href="/admin/attendance/report"><i class="fa-solid fa-chart-bar"></i> Att. Report</a></li>
+        <li><a href="/admin/leaves"><i class="fa-solid fa-envelope-open-text"></i> Student Leaves</a></li>
+        <li><a href="/admin/contact-requests"><i class="fa-solid fa-user-pen"></i> Contact Updates</a></li>
         <li class="nav-header">Finance</li>
         <li><a href="/admin/fees"><i class="fa-solid fa-indian-rupee-sign"></i> Fee Structure</a></li>
         <li><a href="/admin/fees/collect"><i class="fa-solid fa-hand-holding-dollar"></i> Collect Fees</a></li>
@@ -42,7 +45,8 @@
         <li class="nav-header">Results</li>
         <li><a href="/admin/results"><i class="fa-solid fa-file-pen"></i> Results &amp; Exams</a></li>
         <li><a href="/admin/results/class-marks"><i class="fa-solid fa-table-list"></i> Class Marks Sheet</a></li>
-        <li class="nav-header">Communication</li>
+        <li class="nav-header">Media &amp; Notice</li>
+        <li><a href="/admin/gallery"><i class="fa-solid fa-images"></i> School Gallery</a></li>
         <li><a href="/admin/notices"><i class="fa-solid fa-bullhorn"></i> Notices</a></li>
       </ul>
       <% } else if(user && user.role === 'teacher') { %>
@@ -51,17 +55,29 @@
         <li class="nav-header">My Work</li>
         <li><a href="/teacher/attendance"><i class="fa-solid fa-clipboard-check"></i> Mark Attendance</a></li>
         <li><a href="/teacher/attendance/report"><i class="fa-solid fa-chart-bar"></i> Att. Report</a></li>
+        <li><a href="/teacher/homework"><i class="fa-solid fa-book-open"></i> Homework &amp; Tasks</a></li>
         <li><a href="/teacher/results"><i class="fa-solid fa-file-pen"></i> Results Entry</a></li>
         <li><a href="/teacher/students"><i class="fa-solid fa-users"></i> My Students</a></li>
+        <li class="nav-header">Media</li>
+        <li><a href="/teacher/gallery"><i class="fa-solid fa-images"></i> School Gallery</a></li>
       </ul>
       <% } else if(user && user.role === 'student') { %>
       <ul class="sidebar-nav">
         <li><a href="/student"><i class="fa-solid fa-gauge-high"></i> Dashboard</a></li>
-        <li class="nav-header">Academics</li>
+        <li class="nav-header">My Information</li>
+        <li><a href="/student/profile"><i class="fa-solid fa-id-card"></i> My Full Profile</a></li>
         <li><a href="/student/attendance"><i class="fa-solid fa-clipboard-check"></i> My Attendance</a></li>
-        <li><a href="/student/results"><i class="fa-solid fa-trophy"></i> My Results</a></li>
-        <li class="nav-header">Finance</li>
-        <li><a href="/student/fees"><i class="fa-solid fa-indian-rupee-sign"></i> My Fees</a></li>
+        <li class="nav-header">Academics</li>
+        <li><a href="/student/homework"><i class="fa-solid fa-book-open"></i> Homework &amp; Tasks</a></li>
+        <li><a href="/student/timetable"><i class="fa-solid fa-calendar-week"></i> School Timetable</a></li>
+        <li><a href="/student/notices"><i class="fa-solid fa-bullhorn"></i> Announcements</a></li>
+        <li><a href="/student/events"><i class="fa-solid fa-calendar-days"></i> Holidays &amp; Events</a></li>
+        <li class="nav-header">Fees &amp; Requests</li>
+        <li><a href="/student/fees"><i class="fa-solid fa-indian-rupee-sign"></i> Pending Fees &amp; Receipts</a></li>
+        <li><a href="/student/gallery"><i class="fa-solid fa-images"></i> Photo Gallery</a></li>
+        <li><a href="/student/leaves"><i class="fa-solid fa-envelope-open-text"></i> Leave Application</a></li>
+        <li><a href="/student/contact-update"><i class="fa-solid fa-user-pen"></i> Update Contact Info</a></li>
+        <li><a href="/student/contact"><i class="fa-solid fa-headset"></i> Contact School / Teacher</a></li>
       </ul>
       <% } %>
 

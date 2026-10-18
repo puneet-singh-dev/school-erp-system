@@ -1,0 +1,65 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h5 class="fw-bold mb-1"><i class="fa-solid fa-calendar-week text-primary me-2"></i>Weekly Class Timetable</h5>
+    <small class="text-muted">Class <%- student.class_name %> - Section <%- student.section %> &bull; Session <%- student.academic_year || '2026-27' %></small>
+  </div>
+  <a href="/student" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-arrow-left me-1"></i>Back</a>
+</div>
+
+<div class="card shadow-sm border-0">
+  <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+    <h6 class="mb-0 fw-bold"><i class="fa-solid fa-clock text-primary me-2"></i>Weekly Schedule (Monday to Saturday)</h6>
+    <span class="badge bg-primary">8:30 AM - 2:00 PM</span>
+  </div>
+  <div class="card-body p-0">
+    <% 
+      const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const scheduleByDay = {};
+      days.forEach(d => scheduleByDay[d] = []);
+      if (schedule && schedule.length > 0) {
+        schedule.forEach(item => {
+          if (scheduleByDay[item.day_of_week]) {
+            scheduleByDay[item.day_of_week].push(item);
+          }
+        });
+      }
+    %>
+
+    <div class="table-responsive">
+      <table class="table table-bordered align-middle mb-0 text-center">
+        <thead class="table-light">
+          <tr>
+            <th style="width: 130px;">Day</th>
+            <th>Periods &amp; Class Schedule</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% days.forEach(d => { %>
+            <tr>
+              <td class="fw-bold bg-light text-start ps-3">
+                <i class="fa-solid fa-calendar-day text-primary me-1"></i><%- d %>
+              </td>
+              <td class="text-start p-2">
+                <% if(scheduleByDay[d] && scheduleByDay[d].length > 0) { %>
+                  <div class="d-flex flex-wrap gap-2">
+                    <% scheduleByDay[d].forEach((slot, sIdx) => { %>
+                      <div class="p-2 border rounded bg-white shadow-none" style="min-width: 170px;">
+                        <div class="small fw-bold text-primary">Period <%- sIdx + 1 %>: <%- slot.subject_name %></div>
+                        <div class="small text-muted"><i class="fa-regular fa-clock me-1"></i><%- slot.start_time.slice(0,5) %> - <%- slot.end_time.slice(0,5) %></div>
+                        <% if(slot.teacher_name) { %>
+                          <div class="small text-secondary"><i class="fa-solid fa-chalkboard-user me-1"></i><%- slot.teacher_name %></div>
+                        <% } %>
+                      </div>
+                    <% }) %>
+                  </div>
+                <% } else { %>
+                  <span class="text-muted small fst-italic">Standard class routine applicable.</span>
+                <% } %>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

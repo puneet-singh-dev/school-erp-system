@@ -1,0 +1,92 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h5 class="fw-bold mb-1"><i class="fa-solid fa-envelope-open-text text-primary me-2"></i>Student Leave Applications</h5>
+    <small class="text-muted">Review, approve, or reject absence requests submitted by students</small>
+  </div>
+  <div class="btn-group btn-group-sm">
+    <a href="/admin/leaves" class="btn <%- !selectedStatus ? 'btn-primary' : 'btn-outline-primary' %>">All</a>
+    <a href="/admin/leaves?status=Pending" class="btn <%- selectedStatus === 'Pending' ? 'btn-warning' : 'btn-outline-warning' %>">Pending</a>
+    <a href="/admin/leaves?status=Approved" class="btn <%- selectedStatus === 'Approved' ? 'btn-success' : 'btn-outline-success' %>">Approved</a>
+    <a href="/admin/leaves?status=Rejected" class="btn <%- selectedStatus === 'Rejected' ? 'btn-danger' : 'btn-outline-danger' %>">Rejected</a>
+  </div>
+</div>
+
+<div class="card shadow-sm border-0">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Student</th>
+            <th>Class / Section</th>
+            <th>Leave Period</th>
+            <th>Reason</th>
+            <th>Status</th>
+            <th class="text-end">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if(leaves && leaves.length > 0) { %>
+            <% leaves.forEach(l => { %>
+              <tr>
+                <td>
+                  <div class="fw-bold text-dark"><%- l.student_name %></div>
+                  <small class="text-muted">Adm: <%- l.admission_no %> | Roll: <%- l.roll_number || '-' %></small>
+                </td>
+                <td>
+                  <span class="badge bg-light text-dark border"><%- l.class_name %> - <%- l.section %></span>
+                </td>
+                <td>
+                  <div class="fw-semibold small">
+                    <%- new Date(l.from_date).toLocaleDateString('en-IN') %> to <%- new Date(l.to_date).toLocaleDateString('en-IN') %>
+                  </div>
+                  <small class="text-muted">Applied: <%- new Date(l.created_at).toLocaleDateString('en-IN') %></small>
+                </td>
+                <td>
+                  <div class="small text-dark" style="max-width: 280px;"><%- l.reason %></div>
+                  <% if(l.admin_remarks) { %>
+                    <div class="small text-muted fst-italic mt-1"><i class="fa-solid fa-comment-dots me-1"></i>Remarks: <%- l.admin_remarks %></div>
+                  <% } %>
+                </td>
+                <td>
+                  <% if(l.status === 'Approved') { %>
+                    <span class="badge bg-success"><i class="fa-solid fa-check me-1"></i>Approved</span>
+                  <% } else if(l.status === 'Rejected') { %>
+                    <span class="badge bg-danger"><i class="fa-solid fa-xmark me-1"></i>Rejected</span>
+                  <% } else { %>
+                    <span class="badge bg-warning text-dark"><i class="fa-solid fa-hourglass-half me-1"></i>Pending</span>
+                  <% } %>
+                </td>
+                <td class="text-end">
+                  <% if(l.status === 'Pending') { %>
+                    <div class="btn-group btn-group-sm">
+                      <form action="/admin/leaves/<%- l.id %>/approve" method="POST" class="d-inline">
+                        <button type="submit" class="btn btn-outline-success btn-sm me-1" title="Approve Leave">
+                          <i class="fa-solid fa-check me-1"></i>Approve
+                        </button>
+                      </form>
+                      <form action="/admin/leaves/<%- l.id %>/reject" method="POST" class="d-inline">
+                        <button type="submit" class="btn btn-outline-danger btn-sm" title="Reject Leave">
+                          <i class="fa-solid fa-xmark me-1"></i>Reject
+                        </button>
+                      </form>
+                    </div>
+                  <% } else { %>
+                    <small class="text-muted">Reviewed by <%- l.reviewed_by_name || 'Admin' %></small>
+                  <% } %>
+                </td>
+              </tr>
+            <% }) %>
+          <% } else { %>
+            <tr>
+              <td colspan="6" class="text-center text-muted py-5">
+                <i class="fa-solid fa-inbox fs-2 mb-2 d-block opacity-25"></i>
+                No leave applications found.
+              </td>
+            </tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

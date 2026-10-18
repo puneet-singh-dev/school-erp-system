@@ -117,11 +117,11 @@ function drawReceiptVoucher(doc, p, x, y, w, h, copyType) {
      .font('Helvetica').text(feeForText);
 
   // 5. Particulars Table Grid
-  const tableY = y + 130;
+  const tableY = y + 128;
   const colSrW = 20;
   const colPartW = 180;
   const colAmtW = w - 8 - colSrW - colPartW; // ~68 pt
-  const rowH = 12.5;
+  const rowH = 11.5;
 
   // Parse breakdown JSON if available
   let feeItems = [];
@@ -150,8 +150,8 @@ function drawReceiptVoucher(doc, p, x, y, w, h, copyType) {
     feeItems.push({ name: '', amount: null });
   }
 
-  // Display up to 5 items to fit comfortably in the half-page voucher
-  const displayItems = feeItems.slice(0, 5);
+  // Display all components (up to 8 items comfortably fit before summary rows)
+  const displayItems = feeItems.slice(0, 8);
   const numItemRows = displayItems.length;
   const totalGridRows = numItemRows + 3; // + Total Amount, Received Amt, Balance
   const tableBottomY = tableY + rowH * (totalGridRows + 1); // +1 for header

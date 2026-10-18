@@ -1,0 +1,66 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h5 class="fw-bold mb-1"><i class="fa-solid fa-images text-primary me-2"></i>School Photo Gallery</h5>
+    <small class="text-muted">Explore and download campus moments, annual functions, sports, and celebrations</small>
+  </div>
+  <a href="/student" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-arrow-left me-1"></i>Back</a>
+</div>
+
+<!-- Category Filter Pills -->
+<div class="mb-4 d-flex flex-wrap gap-2">
+  <a href="/student/gallery" class="btn btn-sm <%- !selectedCategory ? 'btn-primary' : 'btn-outline-primary' %>">
+    All Photos
+  </a>
+  <% if(categories && categories.length > 0) { %>
+    <% categories.forEach(cat => { %>
+      <a href="/student/gallery?category=<%- encodeURIComponent(cat) %>" class="btn btn-sm <%- selectedCategory === cat ? 'btn-primary' : 'btn-outline-primary' %>">
+        <%- cat %>
+      </a>
+    <% }) %>
+  <% } %>
+</div>
+
+<!-- Gallery Grid -->
+<div class="row g-4">
+  <% if(images && images.length > 0) { %>
+    <% images.forEach(img => { %>
+      <div class="col-sm-6 col-md-4 col-lg-3">
+        <div class="card h-100 shadow-sm border-0 overflow-hidden">
+          <div class="position-relative" style="height: 190px; overflow: hidden; background: #f1f5f9;">
+            <img src="/uploads/gallery/<%- img.image_path %>" 
+                 alt="<%- img.title %>" 
+                 class="w-100 h-100" 
+                 style="object-fit: cover; transition: transform 0.3s ease;"
+                 onmouseover="this.style.transform='scale(1.05)'"
+                 onmouseout="this.style.transform='scale(1)'">
+            <span class="badge bg-dark bg-opacity-75 position-absolute top-0 end-0 m-2">
+              <%- img.category || 'General' %>
+            </span>
+          </div>
+          <div class="card-body p-3 d-flex flex-column">
+            <h6 class="fw-bold text-dark mb-1 text-truncate" title="<%- img.title %>"><%- img.title %></h6>
+            <% if(img.description) { %>
+              <p class="text-muted small mb-3 text-truncate" title="<%- img.description %>"><%- img.description %></p>
+            <% } %>
+            <div class="mt-auto d-flex justify-content-between align-items-center pt-2 border-top">
+              <small class="text-muted"><%- new Date(img.created_at).toLocaleDateString('en-IN') %></small>
+              <a href="/uploads/gallery/<%- img.image_path %>" download="<%- img.title.replace(/[^a-zA-Z0-9]/g, '_') %>.jpg" class="btn btn-sm btn-outline-primary" title="Download High-Res Photo">
+                <i class="fa-solid fa-download me-1"></i>Download
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    <% }) %>
+  <% } else { %>
+    <div class="col-12 text-center py-5">
+      <div class="card shadow-sm border-0 py-5">
+        <div class="card-body">
+          <i class="fa-solid fa-images text-muted fs-1 mb-3 opacity-50"></i>
+          <h5 class="fw-bold text-muted">No photos found in this category</h5>
+          <p class="text-muted small">Photos uploaded by the school administration will appear here.</p>
+        </div>
+      </div>
+    </div>
+  <% } %>
+</div>

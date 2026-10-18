@@ -1,0 +1,155 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h5 class="fw-bold mb-1"><i class="fa-solid fa-id-card text-primary me-2"></i>My Full Profile</h5>
+    <small class="text-muted">Official student registration and admission details &bull; Session <%- student.academic_year || '2026-27' %></small>
+  </div>
+  <a href="/student" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-arrow-left me-1"></i>Back to Dashboard</a>
+</div>
+
+<div class="row g-4">
+  <!-- Left ID Card Style Summary -->
+  <div class="col-lg-4">
+    <div class="card shadow-sm border-0 text-center">
+      <div class="card-header bg-primary text-white py-4 position-relative">
+        <h6 class="mb-0 fw-bold letter-spacing-1 text-uppercase"><%- schoolName %></h6>
+        <small class="opacity-75">Student Identity Card</small>
+      </div>
+      <div class="card-body p-4">
+        <div class="mb-3 position-relative d-inline-block">
+          <img src="<%- student.profile_photo && student.profile_photo !== 'default.png' ? '/uploads/students/' + student.profile_photo : 'https://ui-avatars.com/api/?name=' + encodeURIComponent(student.student_name) + '&size=140&background=0D8ABC&color=fff' %>" 
+               alt="<%- student.student_name %>" 
+               class="rounded-circle border border-4 border-light shadow" 
+               style="width: 120px; height: 120px; object-fit: cover;">
+        </div>
+        <h5 class="fw-bold text-dark mb-1"><%- student.student_name %></h5>
+        <div class="mb-2">
+          <span class="badge bg-success-subtle text-success border border-success px-3 py-1">Active Student</span>
+        </div>
+        <div class="badge bg-primary fs-6 px-3 py-2 mb-3">
+          <%- student.class_name %> - <%- student.section %>
+        </div>
+
+        <div class="p-3 bg-light rounded text-start small border">
+          <div class="d-flex justify-content-between py-1 border-bottom">
+            <span class="text-muted">Admission No:</span>
+            <strong class="text-dark"><%- student.admission_no %></strong>
+          </div>
+          <div class="d-flex justify-content-between py-1 border-bottom">
+            <span class="text-muted">Roll Number:</span>
+            <strong><%- student.roll_number || '-' %></strong>
+          </div>
+          <div class="d-flex justify-content-between py-1 border-bottom">
+            <span class="text-muted">Session:</span>
+            <strong><%- student.academic_year || '2026-27' %></strong>
+          </div>
+          <div class="d-flex justify-content-between py-1">
+            <span class="text-muted">Admission Date:</span>
+            <strong><%- student.admission_date ? new Date(student.admission_date).toLocaleDateString('en-IN') : '-' %></strong>
+          </div>
+        </div>
+
+        <div class="mt-3">
+          <a href="/student/contact-update" class="btn btn-sm btn-outline-primary w-100">
+            <i class="fa-solid fa-user-pen me-1"></i>Request Contact Update
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Comprehensive Details Tab -->
+  <div class="col-lg-8">
+    <div class="card shadow-sm border-0 mb-4">
+      <div class="card-header bg-white py-3 border-bottom">
+        <h6 class="mb-0 fw-bold text-dark"><i class="fa-solid fa-user-check text-primary me-2"></i>Personal &amp; Demographic Information</h6>
+      </div>
+      <div class="card-body p-4">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label text-muted small mb-1">Full Student Name</label>
+            <div class="fw-semibold text-dark p-2 bg-light rounded"><%- student.student_name %></div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label text-muted small mb-1">Date of Birth</label>
+            <div class="fw-semibold text-dark p-2 bg-light rounded"><%- student.date_of_birth ? new Date(student.date_of_birth).toLocaleDateString('en-IN') : '-' %></div>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label text-muted small mb-1">Gender</label>
+            <div class="fw-semibold text-dark p-2 bg-light rounded"><%- student.gender || 'Not Specified' %></div>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label text-muted small mb-1">Blood Group</label>
+            <div class="fw-semibold text-dark p-2 bg-light rounded"><%- student.blood_group || 'N/A' %></div>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label text-muted small mb-1">Category</label>
+            <div class="fw-semibold text-dark p-2 bg-light rounded"><%- student.category || 'General' %></div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label text-muted small mb-1">Aadhaar Card No.</label>
+            <div class="fw-semibold text-dark p-2 bg-light rounded"><%- student.aadhaar_no || 'Not Provided' %></div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label text-muted small mb-1">Portal Login ID</label>
+            <div class="fw-semibold text-primary p-2 bg-light rounded"><i class="fa-solid fa-key me-1"></i><%- student.admission_no %> (Password: Reg. Mobile)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Parent & Guardian Information -->
+    <div class="card shadow-sm border-0 mb-4">
+      <div class="card-header bg-white py-3 border-bottom">
+        <h6 class="mb-0 fw-bold text-dark"><i class="fa-solid fa-people-roof text-success me-2"></i>Parent &amp; Guardian Information</h6>
+      </div>
+      <div class="card-body p-4">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label text-muted small mb-1">Father's Name</label>
+            <div class="fw-semibold text-dark p-2 bg-light rounded"><%- student.father_name || '-' %></div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label text-muted small mb-1">Mother's Name</label>
+            <div class="fw-semibold text-dark p-2 bg-light rounded"><%- student.mother_name || '-' %></div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label text-muted small mb-1">Guardian Name</label>
+            <div class="fw-semibold text-dark p-2 bg-light rounded"><%- student.guardian_name || '-' %></div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label text-muted small mb-1">Guardian Phone</label>
+            <div class="fw-semibold text-dark p-2 bg-light rounded"><%- student.guardian_phone || '-' %></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Contact & Address Information -->
+    <div class="card shadow-sm border-0">
+      <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+        <h6 class="mb-0 fw-bold text-dark"><i class="fa-solid fa-address-book text-warning me-2"></i>Contact Details &amp; Address</h6>
+        <a href="/student/contact-update" class="btn btn-sm btn-outline-warning"><i class="fa-solid fa-pen-to-square me-1"></i>Edit Request</a>
+      </div>
+      <div class="card-body p-4">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label text-muted small mb-1">Registered Mobile Number</label>
+            <div class="fw-semibold text-dark p-2 bg-light rounded"><i class="fa-solid fa-phone text-success me-2"></i><%- student.phone || 'Not Provided' %></div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label text-muted small mb-1">Emergency Contact Number</label>
+            <div class="fw-semibold text-dark p-2 bg-light rounded"><i class="fa-solid fa-phone-volume text-danger me-2"></i><%- student.emergency_contact || '-' %></div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label text-muted small mb-1">Email Address</label>
+            <div class="fw-semibold text-dark p-2 bg-light rounded"><i class="fa-solid fa-envelope text-primary me-2"></i><%- student.email || '-' %></div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label text-muted small mb-1">Permanent Residential Address</label>
+            <div class="fw-semibold text-dark p-2 bg-light rounded"><i class="fa-solid fa-location-dot text-muted me-2"></i><%- student.address || 'Not Provided' %></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
