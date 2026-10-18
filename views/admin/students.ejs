@@ -63,7 +63,14 @@
                   </span>
                 <% } %>
               </td>
-              <td><%- s.class_name ? s.class_name + ' - ' + s.section : '<span class="text-muted">Not assigned</span>' %></td>
+              <td>
+                <%- s.class_name ? s.class_name + ' - ' + s.section : '<span class="text-muted">Not assigned</span>' %>
+                <% if (s.uses_transport) { %>
+                  <span class="badge bg-success-subtle text-success border border-success d-block mt-1" style="font-size: 0.7rem;" title="School Van: <%- s.transport_route || 'Standard Route' %>">
+                    <i class="fa-solid fa-van-shuttle me-1"></i>Van: ₹<%- parseFloat(s.transport_fee || 0).toFixed(0) %>/mo
+                  </span>
+                <% } %>
+              </td>
               <td>
                 <div><i class="fa-solid fa-user-tie text-muted me-1" style="font-size: 0.8rem;"></i><%- s.father_name || s.guardian_name || '-' %></div>
                 <% if(s.mother_name) { %>

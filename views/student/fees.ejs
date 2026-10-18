@@ -38,6 +38,20 @@
 </div>
 <% } %>
 
+<% if (student && student.uses_transport) { %>
+<div class="alert alert-success d-flex align-items-center justify-content-between mb-4 shadow-sm">
+  <div>
+    <i class="fa-solid fa-van-shuttle me-2 text-success fs-5"></i>
+    <strong>School Transport / Van Facility:</strong>
+    <span class="fs-6 fw-bold text-success ms-1">₹<%- parseFloat(student.transport_fee || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 }) %>/month</span>
+    <% if (student.transport_route) { %>
+      <span class="text-muted ms-2"><i class="fa-solid fa-route me-1"></i>Route: <strong><%- student.transport_route %></strong></span>
+    <% } %>
+  </div>
+  <span class="badge bg-success"><i class="fa-solid fa-circle-check me-1"></i>Van Subscribed</span>
+</div>
+<% } %>
+
 <div class="row g-4">
   <!-- Fee Structure -->
   <div class="col-md-5">

@@ -59,6 +59,9 @@ CREATE TABLE IF NOT EXISTS students (
   aadhaar_no VARCHAR(20),
   previous_balance DECIMAL(10,2) DEFAULT 0.00,
   previous_balance_remarks VARCHAR(255),
+  uses_transport BOOLEAN DEFAULT FALSE,
+  transport_route VARCHAR(150),
+  transport_fee DECIMAL(10,2) DEFAULT 0.00,
   admission_date DATE DEFAULT (CURRENT_DATE),
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE SET NULL

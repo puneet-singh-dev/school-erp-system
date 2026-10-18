@@ -207,7 +207,8 @@ router.post('/students/add', upload.single('profile_photo'), async (req, res) =>
     name, email, phone, password, address, admission_no, class_id, roll_number,
     date_of_birth, gender, father_name, mother_name, guardian_name, guardian_phone,
     emergency_contact, blood_group, category, aadhaar_no, admission_date,
-    previous_balance, previous_balance_remarks
+    previous_balance, previous_balance_remarks,
+    uses_transport, transport_route, transport_fee
   } = req.body;
 
   try {
@@ -236,12 +237,17 @@ router.post('/students/add', upload.single('profile_photo'), async (req, res) =>
       [name, email, hashed, 'student', phone || null, address || null, profilePhoto]
     );
 
+    const cleanUsesTransport = (uses_transport === '1' || uses_transport === 1 || uses_transport === true) ? 1 : 0;
+    const cleanTransportRoute = cleanUsesTransport ? ((transport_route && transport_route.trim()) || null) : null;
+    const cleanTransportFee = cleanUsesTransport ? (Math.max(0, parseFloat(transport_fee) || 0)) : 0.00;
+
     await db.query(
       `INSERT INTO students 
        (user_id, admission_no, class_id, roll_number, date_of_birth, gender, 
         father_name, mother_name, guardian_name, guardian_phone, emergency_contact, 
-        blood_group, category, aadhaar_no, admission_date, previous_balance, previous_balance_remarks) 
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        blood_group, category, aadhaar_no, admission_date, previous_balance, previous_balance_remarks,
+        uses_transport, transport_route, transport_fee) 
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         userResult.insertId, admission_no, class_id || null, roll_number || null,
         date_of_birth || null, gender || null,
@@ -250,7 +256,8 @@ router.post('/students/add', upload.single('profile_photo'), async (req, res) =>
         blood_group || null, category || null, aadhaar_no || null,
         admission_date || new Date().toISOString().split('T')[0],
         Math.max(0, parseFloat(previous_balance) || 0),
-        (previous_balance_remarks && previous_balance_remarks.trim()) || null
+        (previous_balance_remarks && previous_balance_remarks.trim()) || null,
+        cleanUsesTransport, cleanTransportRoute, cleanTransportFee
       ]
     );
 
@@ -276,7 +283,8 @@ router.post('/students/edit/:id', upload.single('profile_photo'), async (req, re
   const {
     name, email, phone, address, class_id, roll_number, date_of_birth, gender,
     father_name, mother_name, guardian_name, guardian_phone, emergency_contact,
-    blood_group, category, aadhaar_no, previous_balance, previous_balance_remarks
+    blood_group, category, aadhaar_no, previous_balance, previous_balance_remarks,
+    uses_transport, transport_route, transport_fee
   } = req.body;
 
   try {
@@ -295,12 +303,17 @@ router.post('/students/edit/:id', upload.single('profile_photo'), async (req, re
         [name, email, phone, address, userId]);
     }
 
+    const cleanUsesTransport = (uses_transport === '1' || uses_transport === 1 || uses_transport === true) ? 1 : 0;
+    const cleanTransportRoute = cleanUsesTransport ? ((transport_route && transport_route.trim()) || null) : null;
+    const cleanTransportFee = cleanUsesTransport ? (Math.max(0, parseFloat(transport_fee) || 0)) : 0.00;
+
     await db.query(
       `UPDATE students SET 
         class_id=?, roll_number=?, date_of_birth=?, gender=?, 
         father_name=?, mother_name=?, guardian_name=?, guardian_phone=?, 
         emergency_contact=?, blood_group=?, category=?, aadhaar_no=?,
-        previous_balance=?, previous_balance_remarks=?
+        previous_balance=?, previous_balance_remarks=?,
+        uses_transport=?, transport_route=?, transport_fee=?
        WHERE id=?`,
       [
         class_id || null, roll_number || null, date_of_birth || null, gender || null,
@@ -309,6 +322,7 @@ router.post('/students/edit/:id', upload.single('profile_photo'), async (req, re
         emergency_contact || null, blood_group || null, category || null, aadhaar_no || null,
         Math.max(0, parseFloat(previous_balance) || 0),
         (previous_balance_remarks && previous_balance_remarks.trim()) || null,
+        cleanUsesTransport, cleanTransportRoute, cleanTransportFee,
         req.params.id
       ]
     );

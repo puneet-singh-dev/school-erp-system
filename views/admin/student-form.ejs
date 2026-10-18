@@ -177,6 +177,36 @@
         </div>
       </div>
 
+      <!-- School Transport / Van Facility -->
+      <h6 class="fw-bold text-success mb-3"><i class="fa-solid fa-van-shuttle me-1"></i> School Transport / Van Facility</h6>
+      <div class="row g-3 mb-4 p-3 bg-light rounded border border-success-subtle">
+        <div class="col-md-3">
+          <label class="form-label fw-semibold">Avails School Van / Transport?</label>
+          <select name="uses_transport" id="usesTransportSelect" class="form-select" onchange="toggleTransportFields(this.value)">
+            <option value="0" <%- !student || !student.uses_transport ? 'selected' : '' %>>No (Own Transport)</option>
+            <option value="1" <%- student && student.uses_transport ? 'selected' : '' %>>Yes (School Van)</option>
+          </select>
+        </div>
+        <div class="col-md-5 transport-field" style="<%- (!student || !student.uses_transport) ? 'display: none;' : '' %>">
+          <label class="form-label fw-semibold">Pickup / Drop Route or Stop</label>
+          <input type="text" name="transport_route" id="transportRouteInput" class="form-control"
+            value="<%- student && student.transport_route ? student.transport_route : '' %>"
+            placeholder="e.g. Karma Bazar / Vijay Nagar / Route No. 2">
+          <small class="text-muted">Specify the stop name or van route number.</small>
+        </div>
+        <div class="col-md-4 transport-field" style="<%- (!student || !student.uses_transport) ? 'display: none;' : '' %>">
+          <label class="form-label fw-semibold text-success">Monthly Transport Fee (₹)</label>
+          <div class="input-group">
+            <span class="input-group-text bg-success text-white">₹</span>
+            <input type="number" step="0.01" min="0" name="transport_fee" id="transportFeeInput" class="form-control fw-bold"
+              value="<%- student && student.transport_fee ? parseFloat(student.transport_fee).toFixed(2) : '0.00' %>"
+              placeholder="0.00">
+            <span class="input-group-text small text-muted">/mo</span>
+          </div>
+          <small class="text-muted">Monthly van fee charged to this student.</small>
+        </div>
+      </div>
+
       <div class="d-flex gap-2">
         <button type="submit" class="btn btn-primary px-4">
           <i class="fa-solid fa-save me-1"></i><%- student ? 'Update Student' : 'Add Student' %>
@@ -195,6 +225,19 @@ function previewPhoto(input) {
       document.getElementById('photoPreview').src = e.target.result;
     };
     reader.readAsDataURL(input.files[0]);
+  }
+}
+
+function toggleTransportFields(val) {
+  const isYes = val === '1' || val === 1 || val === true;
+  document.querySelectorAll('.transport-field').forEach(el => {
+    el.style.display = isYes ? 'block' : 'none';
+  });
+  if (!isYes) {
+    const feeInp = document.getElementById('transportFeeInput');
+    if (feeInp) feeInp.value = '0.00';
+    const routeInp = document.getElementById('transportRouteInput');
+    if (routeInp) routeInp.value = '';
   }
 }
 

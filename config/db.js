@@ -24,7 +24,10 @@ async function ensureSchema() {
       { name: 'aadhaar_no', def: 'VARCHAR(20) NULL' },
       { name: 'emergency_contact', def: 'VARCHAR(15) NULL' },
       { name: 'previous_balance', def: 'DECIMAL(10,2) DEFAULT 0.00' },
-      { name: 'previous_balance_remarks', def: 'VARCHAR(255) NULL' }
+      { name: 'previous_balance_remarks', def: 'VARCHAR(255) NULL' },
+      { name: 'uses_transport', def: 'BOOLEAN DEFAULT FALSE' },
+      { name: 'transport_route', def: 'VARCHAR(150) NULL' },
+      { name: 'transport_fee', def: 'DECIMAL(10,2) DEFAULT 0.00' }
     ];
 
     for (const col of studentColumns) {
