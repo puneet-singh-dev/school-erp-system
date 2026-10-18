@@ -90,18 +90,22 @@
 
           <!-- Month-Wise Fee Selection -->
           <div class="mb-4">
-            <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
               <label class="form-label fw-bold mb-0 text-dark">
                 <i class="fa-solid fa-calendar-days text-primary me-1"></i>Select Fee Month(s)
               </label>
               <div class="btn-group btn-group-sm">
-                <button type="button" class="btn btn-outline-secondary py-0 px-2" id="selectAllMonthsBtn">All 12</button>
+                <button type="button" class="btn btn-outline-primary py-0 px-2 quick-months-btn active" data-count="1"><i class="fa-solid fa-1 me-1"></i>1 Month</button>
+                <button type="button" class="btn btn-outline-primary py-0 px-2 quick-months-btn" data-count="2"><i class="fa-solid fa-2 me-1"></i>2 Months</button>
+                <button type="button" class="btn btn-outline-primary py-0 px-2 quick-months-btn" data-count="3"><i class="fa-solid fa-3 me-1"></i>3 Months</button>
                 <button type="button" class="btn btn-outline-secondary py-0 px-2" id="clearMonthsBtn">Clear</button>
+                <button type="button" class="btn btn-outline-secondary py-0 px-2" id="selectAllMonthsBtn">All 12</button>
               </div>
             </div>
 
             <!-- Quarter Quick Selectors -->
-            <div class="mb-2 d-flex flex-wrap gap-1">
+            <div class="mb-2 d-flex flex-wrap gap-1 align-items-center">
+              <span class="small text-muted me-1">Quarterly:</span>
               <button type="button" class="btn btn-xs btn-outline-info py-0 px-2 small quarter-btn" data-months="APR,MAY,JUN">Q1 (Apr-Jun)</button>
               <button type="button" class="btn btn-xs btn-outline-info py-0 px-2 small quarter-btn" data-months="JUL,AUG,SEP">Q2 (Jul-Sep)</button>
               <button type="button" class="btn btn-xs btn-outline-info py-0 px-2 small quarter-btn" data-months="OCT,NOV,DEC">Q3 (Oct-Dec)</button>
@@ -109,18 +113,47 @@
             </div>
 
             <!-- Month Chips -->
-            <div class="month-chips-container d-flex flex-wrap gap-1 p-2 bg-light rounded border">
-              <% const allMonths = ['APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC', 'JAN', 'FEB', 'MAR']; %>
-              <% allMonths.forEach((m, idx) => { %>
-                <label class="btn btn-sm btn-outline-primary month-chip mb-0 <%- idx < 3 ? 'active' : '' %>" style="cursor: pointer;">
-                  <input type="checkbox" class="month-checkbox d-none" value="<%- m %>" <%- idx < 3 ? 'checked' : '' %>>
-                  <%- m %>
-                </label>
+            <% 
+              const paidMonths = new Set();
+              if (payments && payments.length > 0) {
+                payments.forEach(p => {
+                  if (p.months_paid) {
+                    p.months_paid.split(',').forEach(m => {
+                      const t = m.trim().toUpperCase();
+                      if (t) paidMonths.add(t);
+                    });
+                  }
+                });
+              }
+              const allMonths = ['APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC', 'JAN', 'FEB', 'MAR'];
+              let defaultSelectedMonth = null;
+              for (const m of allMonths) {
+                if (!paidMonths.has(m)) {
+                  defaultSelectedMonth = m;
+                  break;
+                }
+              }
+              if (!defaultSelectedMonth) defaultSelectedMonth = 'APR';
+            %>
+            <div class="month-chips-container d-flex flex-wrap gap-2 p-2 bg-light rounded border">
+              <% allMonths.forEach((m) => { 
+                   const isPaid = paidMonths.has(m);
+                   const isDefault = (m === defaultSelectedMonth && !isPaid);
+              %>
+                <div>
+                  <input type="checkbox" class="btn-check month-checkbox" id="month_<%- m %>" value="<%- m %>" autocomplete="off" <%- isDefault ? 'checked' : '' %>>
+                  <label class="btn btn-sm <%- isPaid ? 'btn-outline-success border-success' : 'btn-outline-primary' %> month-chip" for="month_<%- m %>">
+                    <%- m %>
+                    <% if (isPaid) { %>
+                      <i class="fa-solid fa-circle-check text-success ms-1" title="Already Paid"></i>
+                    <% } %>
+                  </label>
+                </div>
               <% }) %>
             </div>
             <div class="mt-2 d-flex justify-content-between align-items-center">
-              <small class="text-muted">Selected: <strong id="selectedMonthsText" class="text-primary">APR, MAY, JUN</strong></small>
-              <span class="badge bg-secondary" id="monthsCountBadge">3 Months</span>
+              <small class="text-muted">Selected: <strong id="selectedMonthsText" class="text-primary"><%- defaultSelectedMonth %></strong></small>
+              <span class="badge bg-primary" id="monthsCountBadge">1 Month</span>
             </div>
           </div>
 
@@ -317,15 +350,24 @@
 
 <style>
 .month-chip {
-  min-width: 58px;
+  min-width: 60px;
   text-align: center;
   font-weight: 600;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease-in-out;
 }
-.month-chip.active {
+.btn-check:checked + .btn-outline-primary {
+  background-color: #0d6efd !important;
+  color: #fff !important;
+  box-shadow: 0 2px 4px rgba(13, 110, 253, 0.35);
+}
+.btn-check:checked + .btn-outline-success {
+  background-color: #198754 !important;
+  color: #fff !important;
+  box-shadow: 0 2px 4px rgba(25, 135, 84, 0.35);
+}
+.quick-months-btn.active {
   background-color: #0d6efd;
   color: white;
-  border-color: #0d6efd;
 }
 .quarter-btn {
   font-size: 0.75rem;
@@ -334,12 +376,13 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-  const monthChips = document.querySelectorAll('.month-chip');
+  const monthCheckboxes = document.querySelectorAll('.month-checkbox');
   const monthsPaidInput = document.getElementById('monthsPaidInput');
   const selectedMonthsText = document.getElementById('selectedMonthsText');
   const monthsCountBadge = document.getElementById('monthsCountBadge');
   const selectAllBtn = document.getElementById('selectAllMonthsBtn');
   const clearBtn = document.getElementById('clearMonthsBtn');
+  const quickMonthsBtns = document.querySelectorAll('.quick-months-btn');
   const quarterBtns = document.querySelectorAll('.quarter-btn');
 
   const feeStructureSelect = document.getElementById('feeStructureSelect');
@@ -390,9 +433,30 @@ document.addEventListener('DOMContentLoaded', function () {
     const monthsStr = months.join(', ');
     if (monthsPaidInput) monthsPaidInput.value = monthsStr;
     if (selectedMonthsText) selectedMonthsText.innerText = monthsStr || 'None selected';
-    if (monthsCountBadge) monthsCountBadge.innerText = `${months.length} Month${months.length === 1 ? '' : 's'}`;
+    if (monthsCountBadge) {
+      monthsCountBadge.innerText = `${months.length} Month${months.length === 1 ? '' : 's'}`;
+      if (months.length === 0) {
+        monthsCountBadge.className = 'badge bg-secondary';
+      } else if (months.length === 1) {
+        monthsCountBadge.className = 'badge bg-primary';
+      } else if (months.length === 2) {
+        monthsCountBadge.className = 'badge bg-success';
+      } else {
+        monthsCountBadge.className = 'badge bg-info text-dark';
+      }
+    }
 
-    // Auto-update base tuition fee if fee structure is selected
+    // Update active highlight on quick-months buttons
+    quickMonthsBtns.forEach(btn => {
+      const c = parseInt(btn.getAttribute('data-count'), 10);
+      if (months.length === c) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+
+    // Auto-update base tuition fee based on exact count of selected months
     if (feeStructureSelect) {
       const selectedOpt = feeStructureSelect.options[feeStructureSelect.selectedIndex];
       const monthlyRate = parseFloat(selectedOpt.getAttribute('data-amount')) || 0;
@@ -400,46 +464,62 @@ document.addEventListener('DOMContentLoaded', function () {
       if (primaryFeeName) primaryFeeName.value = selectedOpt.getAttribute('data-name') || 'Tuition Fee';
 
       if (monthlyRate > 0) {
-        const count = months.length > 0 ? months.length : 1;
+        const count = months.length; // Exactly the number of selected months (e.g. 1 or 2)
         const autoAmt = monthlyRate * count;
         if (primaryFeeAmount) primaryFeeAmount.value = autoAmt.toFixed(2);
+      } else {
+        if (primaryFeeAmount) primaryFeeAmount.value = '0.00';
       }
     }
     recalculateTotals();
   }
 
-  // Month Chips click handler
-  monthChips.forEach(chip => {
-    chip.addEventListener('click', function (e) {
-      const cb = this.querySelector('.month-checkbox');
-      if (e.target !== cb) {
-        cb.checked = !cb.checked;
+  // Month Checkbox change handler (Bootstrap btn-check handles styling natively)
+  monthCheckboxes.forEach(cb => {
+    cb.addEventListener('change', updateMonthsUI);
+  });
+
+  // Quick 1 Month / 2 Months / 3 Months buttons
+  quickMonthsBtns.forEach(btn => {
+    btn.addEventListener('click', function () {
+      const count = parseInt(this.getAttribute('data-count'), 10) || 1;
+      monthCheckboxes.forEach(cb => { cb.checked = false; });
+
+      // First try to check the first 'count' unpaid months
+      let checkedCount = 0;
+      for (const cb of monthCheckboxes) {
+        const label = document.querySelector(`label[for="${cb.id}"]`);
+        const isPaid = label && label.querySelector('.fa-circle-check');
+        if (!isPaid && checkedCount < count) {
+          cb.checked = true;
+          checkedCount++;
+        }
       }
-      if (cb.checked) {
-        this.classList.add('active');
-      } else {
-        this.classList.remove('active');
+
+      // If not enough unpaid found, check from beginning
+      if (checkedCount < count) {
+        for (const cb of monthCheckboxes) {
+          if (!cb.checked && checkedCount < count) {
+            cb.checked = true;
+            checkedCount++;
+          }
+        }
       }
+
       updateMonthsUI();
     });
   });
 
   if (selectAllBtn) {
     selectAllBtn.addEventListener('click', function () {
-      monthChips.forEach(chip => {
-        chip.querySelector('.month-checkbox').checked = true;
-        chip.classList.add('active');
-      });
+      monthCheckboxes.forEach(cb => { cb.checked = true; });
       updateMonthsUI();
     });
   }
 
   if (clearBtn) {
     clearBtn.addEventListener('click', function () {
-      monthChips.forEach(chip => {
-        chip.querySelector('.month-checkbox').checked = false;
-        chip.classList.remove('active');
-      });
+      monthCheckboxes.forEach(cb => { cb.checked = false; });
       updateMonthsUI();
     });
   }
@@ -447,12 +527,8 @@ document.addEventListener('DOMContentLoaded', function () {
   quarterBtns.forEach(btn => {
     btn.addEventListener('click', function () {
       const qMonths = this.getAttribute('data-months').split(',');
-      monthChips.forEach(chip => {
-        const cb = chip.querySelector('.month-checkbox');
-        const match = qMonths.includes(cb.value);
-        cb.checked = match;
-        if (match) chip.classList.add('active');
-        else chip.classList.remove('active');
+      monthCheckboxes.forEach(cb => {
+        cb.checked = qMonths.includes(cb.value);
       });
       updateMonthsUI();
     });
