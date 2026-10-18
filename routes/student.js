@@ -509,9 +509,13 @@ router.get('/gallery', async (req, res) => {
 
 // ==================== RESULTS ACCESS RESTRICTION ====================
 // Student has NO permission to see result marksheet as requested by school policy
-router.get('/results*', (req, res) => {
+const restrictResults = (req, res) => {
   req.flash('error_msg', 'Notice: Result marksheets are issued directly by the school office and examination authority. Students cannot view or download marksheets from the online portal.');
   res.redirect('/student');
-});
+};
+
+router.get('/results', restrictResults);
+router.get('/results/:examId', restrictResults);
+router.get('/results/:examId/download', restrictResults);
 
 module.exports = router;
