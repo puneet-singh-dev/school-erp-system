@@ -24,6 +24,20 @@
   </div>
 </div>
 
+<% if (student && parseFloat(student.previous_balance || 0) > 0) { %>
+<div class="alert alert-warning d-flex align-items-center justify-content-between mb-4 shadow-sm">
+  <div>
+    <i class="fa-solid fa-clock-rotate-left me-2 text-warning fs-5"></i>
+    <strong>Previous Class Fee Balance:</strong>
+    <span class="fs-6 fw-bold text-danger ms-1">₹<%- parseFloat(student.previous_balance).toLocaleString('en-IN', { minimumFractionDigits: 2 }) %></span>
+    <% if(student.previous_balance_remarks) { %>
+      <span class="text-muted ms-2 fst-italic">(<%- student.previous_balance_remarks %>)</span>
+    <% } %>
+  </div>
+  <span class="badge bg-danger">Pending</span>
+</div>
+<% } %>
+
 <div class="row g-4">
   <!-- Fee Structure -->
   <div class="col-md-5">

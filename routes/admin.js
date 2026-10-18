@@ -206,7 +206,8 @@ router.post('/students/add', upload.single('profile_photo'), async (req, res) =>
   let {
     name, email, phone, password, address, admission_no, class_id, roll_number,
     date_of_birth, gender, father_name, mother_name, guardian_name, guardian_phone,
-    emergency_contact, blood_group, category, aadhaar_no, admission_date
+    emergency_contact, blood_group, category, aadhaar_no, admission_date,
+    previous_balance, previous_balance_remarks
   } = req.body;
 
   try {
@@ -239,15 +240,17 @@ router.post('/students/add', upload.single('profile_photo'), async (req, res) =>
       `INSERT INTO students 
        (user_id, admission_no, class_id, roll_number, date_of_birth, gender, 
         father_name, mother_name, guardian_name, guardian_phone, emergency_contact, 
-        blood_group, category, aadhaar_no, admission_date) 
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        blood_group, category, aadhaar_no, admission_date, previous_balance, previous_balance_remarks) 
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         userResult.insertId, admission_no, class_id || null, roll_number || null,
         date_of_birth || null, gender || null,
         father_name || guardian_name || null, mother_name || null,
         guardian_name || father_name || null, guardian_phone || null, emergency_contact || null,
         blood_group || null, category || null, aadhaar_no || null,
-        admission_date || new Date().toISOString().split('T')[0]
+        admission_date || new Date().toISOString().split('T')[0],
+        Math.max(0, parseFloat(previous_balance) || 0),
+        (previous_balance_remarks && previous_balance_remarks.trim()) || null
       ]
     );
 
@@ -273,7 +276,7 @@ router.post('/students/edit/:id', upload.single('profile_photo'), async (req, re
   const {
     name, email, phone, address, class_id, roll_number, date_of_birth, gender,
     father_name, mother_name, guardian_name, guardian_phone, emergency_contact,
-    blood_group, category, aadhaar_no
+    blood_group, category, aadhaar_no, previous_balance, previous_balance_remarks
   } = req.body;
 
   try {
@@ -296,13 +299,16 @@ router.post('/students/edit/:id', upload.single('profile_photo'), async (req, re
       `UPDATE students SET 
         class_id=?, roll_number=?, date_of_birth=?, gender=?, 
         father_name=?, mother_name=?, guardian_name=?, guardian_phone=?, 
-        emergency_contact=?, blood_group=?, category=?, aadhaar_no=? 
+        emergency_contact=?, blood_group=?, category=?, aadhaar_no=?,
+        previous_balance=?, previous_balance_remarks=?
        WHERE id=?`,
       [
         class_id || null, roll_number || null, date_of_birth || null, gender || null,
         father_name || guardian_name || null, mother_name || null,
         guardian_name || father_name || null, guardian_phone || null,
         emergency_contact || null, blood_group || null, category || null, aadhaar_no || null,
+        Math.max(0, parseFloat(previous_balance) || 0),
+        (previous_balance_remarks && previous_balance_remarks.trim()) || null,
         req.params.id
       ]
     );
@@ -633,6 +639,20 @@ router.post('/fees/collect', async (req, res) => {
       ]
     );
 
+    // If any amount was paid towards Previous Balance, deduct from student's remaining previous balance
+    let prevBalancePaid = 0;
+    for (const item of breakdown) {
+      if (item.name && item.name.toLowerCase().includes('previous balance')) {
+        prevBalancePaid += parseFloat(item.amount) || 0;
+      }
+    }
+    if (prevBalancePaid > 0) {
+      await db.query(
+        'UPDATE students SET previous_balance = GREATEST(0, COALESCE(previous_balance, 0) - ?) WHERE id = ?',
+        [prevBalancePaid, student_id]
+      );
+    }
+
     req.flash('success_msg', `Fee collected successfully! Receipt No: ${receiptNo}`);
     res.redirect(`/admin/fees/collect?class_id=${class_id}&student_id=${student_id}&new_receipt_id=${result.insertId}`);
   } catch (err) {
@@ -640,6 +660,24 @@ router.post('/fees/collect', async (req, res) => {
     req.flash('error_msg', 'Error collecting fee: ' + err.message);
     res.redirect(`/admin/fees/collect?class_id=${class_id}&student_id=${student_id}`);
   }
+});
+
+// Update Student Previous Balance Directly from Fee Collect Page
+router.post('/fees/student-balance/:studentId', async (req, res) => {
+  const { previous_balance, previous_balance_remarks, class_id } = req.body;
+  const cleanBal = Math.max(0, parseFloat(previous_balance) || 0);
+  const cleanRem = (previous_balance_remarks || '').trim() || null;
+  try {
+    await db.query(
+      'UPDATE students SET previous_balance=?, previous_balance_remarks=? WHERE id=?',
+      [cleanBal, cleanRem, req.params.studentId]
+    );
+    req.flash('success_msg', 'Previous class balance updated successfully!');
+  } catch (err) {
+    console.error('Error updating previous balance:', err);
+    req.flash('error_msg', 'Error updating previous balance: ' + err.message);
+  }
+  res.redirect(`/admin/fees/collect?class_id=${class_id || ''}&student_id=${req.params.studentId}`);
 });
 
 // Fee Receipt PDF
@@ -688,15 +726,22 @@ router.get('/fees/reminder/:studentId', async (req, res) => {
     const [classFeeStructure] = await db.query('SELECT * FROM fee_structure WHERE class_id=?', [student.class_id]);
 
     const [[feeSummary]] = await db.query(`
-      SELECT SUM(fs.amount) as total_fees, COALESCE(SUM(fp.amount_paid),0) as paid,
-             SUM(fs.amount) - COALESCE(SUM(fp.amount_paid),0) as balance
-      FROM fee_structure fs 
-      LEFT JOIN fee_payments fp ON fp.fee_structure_id=fs.id AND fp.student_id=?
-      WHERE fs.class_id=?`, [student.id, student.class_id]);
+      SELECT COALESCE(SUM(amount), 0) as total_fees
+      FROM fee_structure 
+      WHERE class_id=?`, [student.class_id]);
 
-    student.total_fees = feeSummary ? feeSummary.total_fees : 0;
-    student.paid = feeSummary ? feeSummary.paid : 0;
-    student.balance = feeSummary ? feeSummary.balance : 0;
+    const [[paidSummary]] = await db.query(`
+      SELECT COALESCE(SUM(amount_paid), 0) as paid
+      FROM fee_payments 
+      WHERE student_id=?`, [student.id]);
+
+    const prevBal = parseFloat(student.previous_balance || 0);
+    const currFees = feeSummary ? parseFloat(feeSummary.total_fees || 0) : 0;
+    const paidFees = paidSummary ? parseFloat(paidSummary.paid || 0) : 0;
+
+    student.total_fees = currFees + prevBal;
+    student.paid = paidFees;
+    student.balance = Math.max(0, student.total_fees - student.paid);
 
     const selectedClass = { name: student.class_name, section: student.section, id: student.class_id };
     generateClassFeeRemindersHindiPDF(res, selectedClass, [student], classFeeStructure);
@@ -716,16 +761,32 @@ router.get('/fees/reminder-class/:classId', async (req, res) => {
     const [classFeeStructure] = await db.query('SELECT * FROM fee_structure WHERE class_id=?', [classId]);
 
     const [studentsWithPending] = await db.query(`
-      SELECT s.id as student_id, u.name, s.admission_no, s.roll_number, c.name as class_name, c.section,
-        SUM(fs.amount) as total_fees, COALESCE(SUM(fp.amount_paid),0) as paid,
-        SUM(fs.amount) - COALESCE(SUM(fp.amount_paid),0) as balance
+      SELECT 
+        s.id as student_id, 
+        u.name, 
+        s.admission_no, 
+        s.roll_number, 
+        c.name as class_name, 
+        c.section,
+        COALESCE(s.previous_balance, 0) as previous_balance,
+        s.previous_balance_remarks,
+        COALESCE(fee_totals.total_fees, 0) as total_fees,
+        COALESCE(paid_totals.paid, 0) as paid,
+        (COALESCE(fee_totals.total_fees, 0) + COALESCE(s.previous_balance, 0) - COALESCE(paid_totals.paid, 0)) as balance
       FROM students s 
       JOIN users u ON s.user_id=u.id 
       LEFT JOIN classes c ON s.class_id=c.id
-      JOIN fee_structure fs ON fs.class_id=s.class_id
-      LEFT JOIN fee_payments fp ON fp.student_id=s.id AND fp.fee_structure_id=fs.id
+      LEFT JOIN (
+        SELECT class_id, SUM(amount) as total_fees
+        FROM fee_structure
+        GROUP BY class_id
+      ) fee_totals ON fee_totals.class_id = s.class_id
+      LEFT JOIN (
+        SELECT student_id, SUM(amount_paid) as paid
+        FROM fee_payments
+        GROUP BY student_id
+      ) paid_totals ON paid_totals.student_id = s.id
       WHERE s.class_id=? 
-      GROUP BY s.id 
       HAVING balance > 0 
       ORDER BY s.roll_number, u.name`, [classId]);
 
@@ -752,13 +813,33 @@ router.get('/fees/pending', async (req, res) => {
   let pendingFees = [];
   if (class_id) {
     [pendingFees] = await db.query(`
-      SELECT s.id as student_id, u.name, s.admission_no, c.name as class_name, c.section,
-        SUM(fs.amount) as total_fees, COALESCE(SUM(fp.amount_paid),0) as paid,
-        SUM(fs.amount) - COALESCE(SUM(fp.amount_paid),0) as balance
-      FROM students s JOIN users u ON s.user_id=u.id LEFT JOIN classes c ON s.class_id=c.id
-      JOIN fee_structure fs ON fs.class_id=s.class_id
-      LEFT JOIN fee_payments fp ON fp.student_id=s.id AND fp.fee_structure_id=fs.id
-      WHERE s.class_id=? GROUP BY s.id HAVING balance > 0 ORDER BY balance DESC`, [class_id]);
+      SELECT 
+        s.id as student_id, 
+        u.name, 
+        s.admission_no, 
+        c.name as class_name, 
+        c.section,
+        COALESCE(s.previous_balance, 0) as previous_balance,
+        s.previous_balance_remarks,
+        COALESCE(fee_totals.total_fees, 0) as total_fees,
+        COALESCE(paid_totals.paid, 0) as paid,
+        (COALESCE(fee_totals.total_fees, 0) + COALESCE(s.previous_balance, 0) - COALESCE(paid_totals.paid, 0)) as balance
+      FROM students s 
+      JOIN users u ON s.user_id=u.id 
+      LEFT JOIN classes c ON s.class_id=c.id
+      LEFT JOIN (
+        SELECT class_id, SUM(amount) as total_fees
+        FROM fee_structure
+        GROUP BY class_id
+      ) fee_totals ON fee_totals.class_id = s.class_id
+      LEFT JOIN (
+        SELECT student_id, SUM(amount_paid) as paid
+        FROM fee_payments
+        GROUP BY student_id
+      ) paid_totals ON paid_totals.student_id = s.id
+      WHERE s.class_id=? 
+      HAVING balance > 0 
+      ORDER BY balance DESC`, [class_id]);
   }
   res.render('admin/fee-pending', { title: 'Pending Fees', classes, pendingFees, class_id });
 });

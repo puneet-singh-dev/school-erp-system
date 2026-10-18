@@ -22,7 +22,9 @@ async function ensureSchema() {
       { name: 'blood_group', def: 'VARCHAR(10) NULL' },
       { name: 'category', def: 'VARCHAR(20) NULL' },
       { name: 'aadhaar_no', def: 'VARCHAR(20) NULL' },
-      { name: 'emergency_contact', def: 'VARCHAR(15) NULL' }
+      { name: 'emergency_contact', def: 'VARCHAR(15) NULL' },
+      { name: 'previous_balance', def: 'DECIMAL(10,2) DEFAULT 0.00' },
+      { name: 'previous_balance_remarks', def: 'VARCHAR(255) NULL' }
     ];
 
     for (const col of studentColumns) {

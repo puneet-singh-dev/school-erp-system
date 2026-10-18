@@ -76,12 +76,15 @@ function drawSingleHindiReminderSlip(doc, student, pendingFees, y, height) {
   doc.rect(x + 8, row1Y, w - 16, rowH + 2).stroke('#000000');
   doc.font('Hindi').fontSize(7.5);
 
-  const feeTypesText = pendingFees && pendingFees.length > 0 ? pendingFees.map(f => f.fee_type).join(', ') : 'समस्त बकाया विद्यालय शुल्क';
+  let feeTypesText = pendingFees && pendingFees.length > 0 ? pendingFees.map(f => f.fee_type).join(', ') : 'समस्त बकाया विद्यालय शुल्क';
+  if (parseFloat(student.previous_balance || 0) > 0) {
+    feeTypesText += ` (पूर्व कक्षा/सत्र बकाया: ₹${parseFloat(student.previous_balance).toFixed(0)})`;
+  }
   const totalAmount = parseFloat(student.total_fees || 0);
   const paidAmount = parseFloat(student.paid || 0);
   const balanceAmount = parseFloat(student.balance || (totalAmount - paidAmount));
 
-  doc.text(feeTypesText.slice(0, 48), x + 12, row1Y + 3, { width: col1W - 8 });
+  doc.text(feeTypesText.slice(0, 65), x + 12, row1Y + 3, { width: col1W - 8 });
   doc.text(`₹ ${totalAmount.toFixed(2)}`, x + 8 + col1W, row1Y + 3, { width: col2W, align: 'right' });
   doc.text(`₹ ${paidAmount.toFixed(2)}`, x + 8 + col1W + col2W, row1Y + 3, { width: col3W, align: 'right' });
   

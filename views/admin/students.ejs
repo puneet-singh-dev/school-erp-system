@@ -57,6 +57,11 @@
               <td>
                 <span class="badge bg-secondary"><%- s.admission_no %></span>
                 <% if (s.roll_number) { %><small class="text-muted d-block">Roll: <%- s.roll_number %></small><% } %>
+                <% if (s.previous_balance && parseFloat(s.previous_balance) > 0) { %>
+                  <span class="badge bg-danger-subtle text-danger border border-danger d-block mt-1" style="font-size: 0.7rem;" title="Previous Balance: ₹<%- parseFloat(s.previous_balance).toFixed(2) %><%- s.previous_balance_remarks ? ' (' + s.previous_balance_remarks + ')' : '' %>">
+                    <i class="fa-solid fa-clock-rotate-left me-1"></i>Prev: ₹<%- parseFloat(s.previous_balance).toLocaleString('en-IN') %>
+                  </span>
+                <% } %>
               </td>
               <td><%- s.class_name ? s.class_name + ' - ' + s.section : '<span class="text-muted">Not assigned</span>' %></td>
               <td>

@@ -165,6 +165,12 @@ router.get('/fees', async (req, res) => {
       WHERE fs.class_id=?
     `, [student.id, student.class_id]);
 
+    const prevBal = parseFloat(student.previous_balance || 0);
+    if (summary) {
+      summary.previous_balance = prevBal;
+      summary.total_fees = parseFloat(summary.total_fees || 0) + prevBal;
+    }
+
     res.render('student/fees', {
       title: 'My Fees & Receipts',
       student,

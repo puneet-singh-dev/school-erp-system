@@ -46,6 +46,12 @@
             <span class="text-muted">Admission Date:</span>
             <strong><%- student.admission_date ? new Date(student.admission_date).toLocaleDateString('en-IN') : '-' %></strong>
           </div>
+          <% if (student.previous_balance && parseFloat(student.previous_balance) > 0) { %>
+          <div class="d-flex justify-content-between py-1 border-top mt-1">
+            <span class="text-danger fw-semibold"><i class="fa-solid fa-clock-rotate-left me-1"></i>Prev. Balance:</span>
+            <strong class="text-danger">₹<%- parseFloat(student.previous_balance).toLocaleString('en-IN') %></strong>
+          </div>
+          <% } %>
         </div>
 
         <div class="mt-3">
