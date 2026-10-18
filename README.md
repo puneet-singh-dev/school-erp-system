@@ -134,3 +134,32 @@ school-erp/
 6. Go to **Fees** → Add fee structure for the class
 7. Go to **Attendance** → Mark daily attendance
 8. Go to **Results** → Create exam → Enter marks → Print report cards
+
+---
+
+## 🚀 How to Deploy Online (Free)
+
+> ⚠️ **Note on GitHub Pages:** GitHub Pages is strictly for static HTML/CSS websites. Because this system is a full-stack **Node.js + Express backend with a MySQL database**, it cannot run directly on GitHub Pages (which only renders static README files). 
+> Use one of the free platforms below:
+
+### Option A: Railway (Easiest - 1 Click Node.js + MySQL)
+1. Go to [railway.app](https://railway.app) and sign in with GitHub.
+2. Click **New Project** → **Deploy from GitHub repo** → select `school-erp-system`.
+3. In the same project, click **+ New** → **Database** → **MySQL**.
+4. Railway will automatically link your database URL (`DATABASE_URL`).
+5. Your School ERP is now live with a public URL!
+
+### Option B: Render.com (Free Web Service)
+1. Go to [render.com](https://render.com) and sign in with GitHub.
+2. Click **New +** → **Web Service** → Connect your `school-erp-system` repo.
+3. Settings:
+   - **Environment:** `Node`
+   - **Build Command:** `npm install`
+   - **Start Command:** `node app.js`
+4. In **Environment Variables**, add:
+   - `DATABASE_URL`: `mysql://username:password@host:port/dbname` (from a free MySQL provider like [Aiven.io](https://aiven.io), [Clever-Cloud.com](https://www.clever-cloud.com), or Railway)
+   - `SESSION_SECRET`: any random string
+   - `SCHOOL_NAME`: `Shri Amrit Lal Smarak School And College`
+   - `SCHOOL_PHONE`: `9129914501`
+5. Click **Deploy Web Service**! The app will automatically initialize all database tables and the admin account on first boot.
+

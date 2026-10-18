@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: school-erp
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node app.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: DB_HOST
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: DB_PORT
+        value: "3306"
+      - key: DB_SSL
+        value: "true"
+      - key: SCHOOL_NAME
+        value: "Shri Amrit Lal Smarak School And College"
+      - key: SCHOOL_ADDRESS
+        value: "Vijay Nagar, Karma Bazar, Prayagraj (U.P)"
+      - key: SCHOOL_PHONE
+        value: "9129914501"
+      - key: DEVELOPED_BY
+        value: "Developed by Er. Puneet"
