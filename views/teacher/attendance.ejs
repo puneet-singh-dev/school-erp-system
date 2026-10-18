@@ -44,7 +44,7 @@
               <div class="att-buttons">
                 <% ['Present','Absent','Late','Leave'].forEach(status => { %>
                 <label class="att-label att-<%- status.toLowerCase() %> <%- (attendanceMap[s.id]||'Present')===status?'selected':'' %>">
-                  <input type="radio" name="statuses[<%- s.id %>]" value="<%- status %>" <%- (attendanceMap[s.id]||'Present')===status?'checked':'' %> style="position:absolute;opacity:0;pointer-events:none;width:0;height:0;">
+                  <input type="radio" name="statuses[s_<%- s.id %>]" value="<%- status %>" <%- (attendanceMap[s.id]||'Present')===status?'checked':'' %> style="position:absolute;opacity:0;pointer-events:none;width:0;height:0;">
                   <%- status %>
                 </label>
                 <% }) %>

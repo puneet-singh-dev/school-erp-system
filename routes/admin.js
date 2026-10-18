@@ -442,17 +442,50 @@ router.post('/attendance/save', async (req, res) => {
   const { class_id, date, statuses } = req.body;
   const cleanClassId = parseInt(class_id, 10);
   const cleanDate = date ? moment(date).format('YYYY-MM-DD') : moment().format('YYYY-MM-DD');
+
+  if (!cleanClassId || isNaN(cleanClassId)) {
+    req.flash('error_msg', 'Invalid class selected.');
+    return res.redirect('/admin/attendance');
+  }
+
   try {
-    if (statuses && typeof statuses === 'object') {
-      for (const [studentId, status] of Object.entries(statuses)) {
-        const cleanStudentId = parseInt(studentId, 10);
-        if (!isNaN(cleanStudentId)) {
-          await db.query(`INSERT INTO attendance (student_id,class_id,date,status,marked_by) VALUES (?,?,?,?,?)
-            ON DUPLICATE KEY UPDATE status=?, marked_by=?`,
-            [cleanStudentId, cleanClassId, cleanDate, status, req.session.user.id, status, req.session.user.id]);
-        }
-      }
+    const [validStudents] = await db.query(
+      'SELECT id, user_id FROM students WHERE class_id = ? ORDER BY roll_number, id',
+      [cleanClassId]
+    );
+
+    if (!validStudents || validStudents.length === 0) {
+      req.flash('error_msg', 'No students found in this class.');
+      return res.redirect(`/admin/attendance?class_id=${cleanClassId}&date=${cleanDate}`);
     }
+
+    const validStatuses = ['Present', 'Absent', 'Late', 'Leave'];
+    const markedBy = req.session && req.session.user ? req.session.user.id : null;
+
+    for (let idx = 0; idx < validStudents.length; idx++) {
+      const s = validStudents[idx];
+      let status = 'Present';
+
+      if (Array.isArray(statuses)) {
+        status = statuses[idx] || 'Present';
+      } else if (statuses && typeof statuses === 'object') {
+        status = statuses[`s_${s.id}`] ||
+                 statuses[s.id] ||
+                 statuses[`student_${s.id}`] ||
+                 statuses[`s_${s.user_id}`] ||
+                 statuses[s.user_id] ||
+                 'Present';
+      }
+
+      if (!validStatuses.includes(status)) {
+        status = 'Present';
+      }
+
+      await db.query(`INSERT INTO attendance (student_id,class_id,date,status,marked_by) VALUES (?,?,?,?,?)
+        ON DUPLICATE KEY UPDATE status=?, marked_by=?`,
+        [s.id, cleanClassId, cleanDate, status, markedBy, status, markedBy]);
+    }
+
     req.flash('success_msg', 'Attendance saved successfully!');
     res.redirect(`/admin/attendance?class_id=${cleanClassId}&date=${cleanDate}`);
   } catch (err) {
