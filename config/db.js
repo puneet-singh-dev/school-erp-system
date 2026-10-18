@@ -396,6 +396,26 @@ async function ensureSchema() {
       )
     `);
 
+    // 6. Ensure initial classes exist if table is empty
+    const [[{ classCount }]] = await pool.query('SELECT COUNT(*) as classCount FROM classes');
+    if (classCount === 0) {
+      await pool.query(`
+        INSERT INTO classes (name, section, academic_year) VALUES
+        ('Class 1', 'A', '2026-27'),
+        ('Class 2', 'A', '2026-27'),
+        ('Class 3', 'A', '2026-27'),
+        ('Class 4', 'A', '2026-27'),
+        ('Class 5', 'A', '2026-27'),
+        ('Class 6', 'A', '2026-27'),
+        ('Class 7', 'A', '2026-27'),
+        ('Class 8', 'A', '2026-27'),
+        ('Class 9', 'A', '2026-27'),
+        ('Class 10', 'A', '2026-27')
+      `);
+      console.log('✅ Default classes initialized (Class 1 to 10).');
+    }
+
+    console.log('✅ All database schema checks and seeding completed.');
   } catch (err) {
     console.error('ensureSchema error:', err.message);
   }

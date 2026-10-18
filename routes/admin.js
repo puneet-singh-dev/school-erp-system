@@ -402,10 +402,21 @@ router.post('/teachers/delete/:id', async (req, res) => {
 
 // ==================== CLASSES ====================
 router.get('/classes', async (req, res) => {
-  const [classes] = await db.query(`SELECT c.*, u.name as teacher_name, COUNT(DISTINCT s.id) as student_count
-    FROM classes c LEFT JOIN users u ON c.teacher_id=u.id LEFT JOIN students s ON c.id=s.class_id GROUP BY c.id ORDER BY c.name, c.section`);
-  const [teachers] = await db.query("SELECT u.id, u.name FROM users u WHERE u.role='teacher' ORDER BY u.name");
-  res.render('admin/classes', { title: 'Classes', classes, teachers });
+  try {
+    const [classes] = await db.query(`
+      SELECT c.*, u.name as teacher_name, 
+             (SELECT COUNT(*) FROM students s WHERE s.class_id = c.id) as student_count
+      FROM classes c 
+      LEFT JOIN users u ON c.teacher_id = u.id 
+      ORDER BY c.name, c.section
+    `);
+    const [teachers] = await db.query("SELECT u.id, u.name FROM users u WHERE u.role='teacher' ORDER BY u.name");
+    res.render('admin/classes', { title: 'Classes', classes, teachers });
+  } catch (err) {
+    console.error('Classes error:', err);
+    req.flash('error_msg', 'Error loading classes: ' + err.message);
+    res.render('admin/classes', { title: 'Classes', classes: [], teachers: [] });
+  }
 });
 
 router.post('/classes/add', async (req, res) => {
@@ -516,22 +527,30 @@ router.post('/attendance/save', async (req, res) => {
 });
 
 router.get('/attendance/report', async (req, res) => {
-  const [classes] = await db.query('SELECT * FROM classes ORDER BY name, section');
-  const { class_id, month, year } = req.query;
-  let report = [], selectedClass = null;
-  if (class_id && month && year) {
-    [report] = await db.query(`
-      SELECT u.name, s.admission_no, s.roll_number,
-        SUM(CASE WHEN a.status='Present' THEN 1 ELSE 0 END) as present,
-        SUM(CASE WHEN a.status='Absent' THEN 1 ELSE 0 END) as absent,
-        SUM(CASE WHEN a.status='Late' THEN 1 ELSE 0 END) as late,
-        COUNT(a.id) as total_days
-      FROM students s JOIN users u ON s.user_id=u.id
-      LEFT JOIN attendance a ON s.id=a.student_id AND MONTH(a.date)=? AND YEAR(a.date)=?
-      WHERE s.class_id=? GROUP BY s.id ORDER BY s.roll_number`, [month, year, class_id]);
-    [[selectedClass]] = await db.query('SELECT *, name as class_name FROM classes WHERE id=?', [class_id]);
+  try {
+    const [classes] = await db.query('SELECT * FROM classes ORDER BY name, section');
+    const { class_id, month, year } = req.query;
+    let report = [], selectedClass = null;
+    if (class_id && month && year) {
+      [report] = await db.query(`
+        SELECT u.name, s.admission_no, s.roll_number,
+          SUM(CASE WHEN a.status='Present' THEN 1 ELSE 0 END) as present,
+          SUM(CASE WHEN a.status='Absent' THEN 1 ELSE 0 END) as absent,
+          SUM(CASE WHEN a.status='Late' THEN 1 ELSE 0 END) as late,
+          COUNT(a.id) as total_days
+        FROM students s JOIN users u ON s.user_id=u.id
+        LEFT JOIN attendance a ON s.id=a.student_id AND MONTH(a.date)=? AND YEAR(a.date)=?
+        WHERE s.class_id=? 
+        GROUP BY s.id, u.name, s.admission_no, s.roll_number 
+        ORDER BY s.roll_number`, [month, year, class_id]);
+      [[selectedClass]] = await db.query('SELECT *, name as class_name FROM classes WHERE id=?', [class_id]);
+    }
+    res.render('admin/attendance-report', { title: 'Attendance Report', classes, report, class_id, month: month || new Date().getMonth()+1, year: year || new Date().getFullYear(), selectedClass });
+  } catch (err) {
+    console.error('Attendance report error:', err);
+    req.flash('error_msg', 'Error loading report: ' + err.message);
+    res.render('admin/attendance-report', { title: 'Attendance Report', classes: [], report: [], class_id: null, month: new Date().getMonth()+1, year: new Date().getFullYear(), selectedClass: null });
   }
-  res.render('admin/attendance-report', { title: 'Attendance Report', classes, report, class_id, month: month || new Date().getMonth()+1, year: year || new Date().getFullYear(), selectedClass });
 });
 
 // ==================== FEES ====================

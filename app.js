@@ -45,10 +45,12 @@ app.use((req, res, next) => {
   res.locals.error_msg = req.flash('error_msg');
   res.locals.error = req.flash('error');
   // School branding — available in all views
-  res.locals.schoolName = process.env.SCHOOL_NAME || 'School ERP';
-  res.locals.schoolAddress = process.env.SCHOOL_ADDRESS || '';
-  res.locals.schoolPhone = process.env.SCHOOL_PHONE || '';
-  res.locals.developedBy = process.env.DEVELOPED_BY || '';
+  res.locals.schoolName = (process.env.SCHOOL_NAME && process.env.SCHOOL_NAME !== 'School ERP')
+    ? process.env.SCHOOL_NAME
+    : 'Shri Amrit Lal Smarak School And College';
+  res.locals.schoolAddress = process.env.SCHOOL_ADDRESS || 'Vijay Nagar, Karma Bazar, Prayagraj (U.P)';
+  res.locals.schoolPhone = process.env.SCHOOL_PHONE || '9129914501';
+  res.locals.developedBy = process.env.DEVELOPED_BY || 'Er. Puneet Singh';
   next();
 });
 

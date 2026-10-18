@@ -148,22 +148,29 @@ router.get('/students', async (req, res) => {
 
 // Attendance report
 router.get('/attendance/report', async (req, res) => {
-  const userId = req.session.user.id;
-  const [classes] = await db.query('SELECT * FROM classes WHERE teacher_id=?', [userId]);
-  const { class_id, month, year } = req.query;
-  let report = [], selectedClass = null;
-  if (class_id && month && year) {
-    [report] = await db.query(`
-      SELECT u.name, s.admission_no, s.roll_number,
-        SUM(CASE WHEN a.status='Present' THEN 1 ELSE 0 END) as present,
-        SUM(CASE WHEN a.status='Absent' THEN 1 ELSE 0 END) as absent,
-        COUNT(a.id) as total_days
-      FROM students s JOIN users u ON s.user_id=u.id
-      LEFT JOIN attendance a ON s.id=a.student_id AND MONTH(a.date)=? AND YEAR(a.date)=?
-      WHERE s.class_id=? GROUP BY s.id ORDER BY s.roll_number`, [month, year, class_id]);
-    [[selectedClass]] = await db.query('SELECT *, name as class_name FROM classes WHERE id=?', [class_id]);
+  try {
+    const userId = req.session.user.id;
+    const [classes] = await db.query('SELECT * FROM classes WHERE teacher_id=?', [userId]);
+    const { class_id, month, year } = req.query;
+    let report = [], selectedClass = null;
+    if (class_id && month && year) {
+      [report] = await db.query(`
+        SELECT u.name, s.admission_no, s.roll_number,
+          SUM(CASE WHEN a.status='Present' THEN 1 ELSE 0 END) as present,
+          SUM(CASE WHEN a.status='Absent' THEN 1 ELSE 0 END) as absent,
+          COUNT(a.id) as total_days
+        FROM students s JOIN users u ON s.user_id=u.id
+        LEFT JOIN attendance a ON s.id=a.student_id AND MONTH(a.date)=? AND YEAR(a.date)=?
+        WHERE s.class_id=? 
+        GROUP BY s.id, u.name, s.admission_no, s.roll_number 
+        ORDER BY s.roll_number`, [month, year, class_id]);
+      [[selectedClass]] = await db.query('SELECT *, name as class_name FROM classes WHERE id=?', [class_id]);
+    }
+    res.render('teacher/attendance-report', { title: 'Attendance Report', classes, report, class_id, month: month || new Date().getMonth()+1, year: year || new Date().getFullYear(), selectedClass });
+  } catch (err) {
+    console.error('Teacher attendance report error:', err);
+    res.render('teacher/attendance-report', { title: 'Attendance Report', classes: [], report: [], class_id: null, month: new Date().getMonth()+1, year: new Date().getFullYear(), selectedClass: null });
   }
-  res.render('teacher/attendance-report', { title: 'Attendance Report', classes, report, class_id, month: month || new Date().getMonth()+1, year: year || new Date().getFullYear(), selectedClass });
 });
 
 // ==================== HOMEWORK ====================
