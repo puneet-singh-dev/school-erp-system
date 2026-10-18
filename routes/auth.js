@@ -88,8 +88,8 @@ router.post('/login', async (req, res) => {
       res.redirect(`/${user.role}`);
     });
   } catch (err) {
-    console.error(err);
-    req.flash('error_msg', 'Server error. Try again.');
+    console.error('Login error:', err);
+    req.flash('error_msg', 'Database/Server error: ' + (err.message || 'Please check database connection.'));
     res.redirect('/login');
   }
 });

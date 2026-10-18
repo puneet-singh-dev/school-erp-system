@@ -1,29 +1,63 @@
 const mysql = require('mysql2/promise');
 require('dotenv').config();
 
-const dbUri = process.env.DATABASE_URL || process.env.MYSQL_URL || process.env.JAWSDB_URL || process.env.CLEARDB_DATABASE_URL;
+function getPoolConfig() {
+  const dbUri = (process.env.DATABASE_URL || process.env.MYSQL_URL || process.env.JAWSDB_URL || process.env.CLEARDB_DATABASE_URL || '').trim();
 
-const poolConfig = dbUri
-  ? {
-      uri: dbUri,
-      ssl: process.env.DB_SSL === 'false' ? undefined : { rejectUnauthorized: false },
-      waitForConnections: true,
-      connectionLimit: 10,
-      queueLimit: 0
+  if (dbUri) {
+    try {
+      // Safely parse URI by normalizing protocol
+      const parsed = new URL(dbUri.replace(/^[a-z]+:\/\//i, 'http://'));
+      let dbName = parsed.pathname ? parsed.pathname.replace(/^\//, '').split('?')[0] : '';
+      // 'sys' is a reserved system database in MySQL/TiDB. Default to 'test' if sys is given.
+      if (!dbName || dbName === 'sys') dbName = 'test';
+
+      const config = {
+        host: parsed.hostname,
+        port: parsed.port ? parseInt(parsed.port, 10) : 4000,
+        user: decodeURIComponent(parsed.username || 'root'),
+        password: decodeURIComponent(parsed.password || ''),
+        database: dbName,
+        waitForConnections: true,
+        connectionLimit: 10,
+        queueLimit: 0
+      };
+
+      // For cloud databases (TiDB, Aiven, Railway, etc.), provide TLS config
+      if (process.env.DB_SSL !== 'false') {
+        config.ssl = { minVersion: 'TLSv1.2', rejectUnauthorized: false };
+      }
+
+      console.log(`📡 Connecting to Cloud Database: ${config.host}:${config.port}/${config.database} (User: ${config.user})`);
+      return config;
+    } catch (err) {
+      console.warn('Could not parse database URI as URL, stripping query parameters:', err.message);
+      const sanitizedUri = dbUri.replace(/\?.*$/, '');
+      return {
+        uri: sanitizedUri,
+        ssl: { rejectUnauthorized: false },
+        waitForConnections: true,
+        connectionLimit: 10,
+        queueLimit: 0
+      };
     }
-  : {
-      host: process.env.DB_HOST || process.env.MYSQLHOST || 'localhost',
-      port: process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : (process.env.MYSQLPORT ? parseInt(process.env.MYSQLPORT, 10) : 3306),
-      user: process.env.DB_USER || process.env.MYSQLUSER || 'root',
-      password: process.env.DB_PASSWORD !== undefined ? process.env.DB_PASSWORD : (process.env.MYSQLPASSWORD || ''),
-      database: process.env.DB_NAME || process.env.MYSQLDATABASE || 'school_erp',
-      ssl: (process.env.DB_SSL === 'true' || process.env.MYSQL_SSL === 'true') ? { rejectUnauthorized: false } : undefined,
-      waitForConnections: true,
-      connectionLimit: 10,
-      queueLimit: 0
-    };
+  }
 
-const pool = mysql.createPool(poolConfig);
+  // Standard environment variables fallback (localhost / local dev)
+  return {
+    host: process.env.DB_HOST || process.env.MYSQLHOST || 'localhost',
+    port: process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : (process.env.MYSQLPORT ? parseInt(process.env.MYSQLPORT, 10) : 3306),
+    user: process.env.DB_USER || process.env.MYSQLUSER || 'root',
+    password: process.env.DB_PASSWORD !== undefined ? process.env.DB_PASSWORD : (process.env.MYSQLPASSWORD || ''),
+    database: (process.env.DB_NAME && process.env.DB_NAME !== 'sys') ? process.env.DB_NAME : (process.env.MYSQLDATABASE || 'school_erp'),
+    ssl: (process.env.DB_SSL === 'true' || process.env.MYSQL_SSL === 'true') ? { rejectUnauthorized: false } : undefined,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
+  };
+}
+
+const pool = mysql.createPool(getPoolConfig());
 
 // Auto-migration & Schema helper: auto-provisions base schema & extra columns
 async function ensureSchema() {
