@@ -13,6 +13,7 @@ const { generateClassMarksPDF } = require('../utils/marksheetPdf');
 const { generateClassFeeRemindersHindiPDF } = require('../utils/feeReminderHindiPdf');
 const { generateClassStudentListPDF } = require('../utils/classListPdf');
 const { generateStudentListPDF } = require('../utils/studentListPdf');
+const { getNextSequentialAdmissionNo, generateDemoData, clearDemoData } = require('../utils/demoData');
 
 // Configure Multer for student profile photo uploads
 const uploadDir = path.join(__dirname, '../public/uploads/students');
@@ -174,18 +175,55 @@ router.get('/', async (req, res) => {
       notices = nList || [];
     } catch (e) { console.error('Dashboard notices error:', e.message); }
 
+    // 10. Demo records count
+    let demoCount = 0;
+    try {
+      const [[dRow]] = await db.query('SELECT COUNT(*) as demoCount FROM users WHERE is_demo = 1');
+      demoCount = dRow ? dRow.demoCount : 0;
+    } catch (e) { console.error('Dashboard demo count error:', e.message); }
+
     res.render('admin/dashboard', {
       title: 'Admin Dashboard',
       totalStudents, totalTeachers, totalClasses, feesCollected, totalAllFees,
-      attendanceData, feeMonthly, recentStudents, notices
+      attendanceData, feeMonthly, recentStudents, notices, demoCount
     });
   } catch (err) {
     console.error('Dashboard fatal error:', err.message);
     res.render('admin/dashboard', {
       title: 'Admin Dashboard',
       totalStudents: 0, totalTeachers: 0, totalClasses: 0, feesCollected: 0, totalAllFees: 0,
-      attendanceData: [], feeMonthly: [], recentStudents: [], notices: []
+      attendanceData: [], feeMonthly: [], recentStudents: [], notices: [], demoCount: 0
     });
+  }
+});
+
+// ==================== DEMO DATA MANAGEMENT ====================
+router.post('/demo/generate', async (req, res) => {
+  try {
+    const adminId = (req.session && req.session.user) ? req.session.user.id : 1;
+    const result = await generateDemoData(adminId);
+    if (result.alreadyExists) {
+      req.flash('info_msg', `Demo data is already active (${result.count} records).`);
+    } else {
+      req.flash('success_msg', `Demo data successfully generated: ${result.students} students and ${result.teachers} teachers across classes!`);
+    }
+    res.redirect('/admin');
+  } catch (err) {
+    console.error('Error generating demo data:', err);
+    req.flash('error_msg', 'Error generating demo data: ' + err.message);
+    res.redirect('/admin');
+  }
+});
+
+router.post('/demo/clear', async (req, res) => {
+  try {
+    const deletedCount = await clearDemoData();
+    req.flash('success_msg', `Demo data deleted successfully (${deletedCount} records removed). Demo mode exited.`);
+    res.redirect('/admin');
+  } catch (err) {
+    console.error('Error clearing demo data:', err);
+    req.flash('error_msg', 'Error clearing demo data: ' + err.message);
+    res.redirect('/admin');
   }
 });
 
@@ -193,9 +231,8 @@ router.get('/', async (req, res) => {
 router.get('/api/next-ids', async (req, res) => {
   try {
     const year = new Date().getFullYear().toString().slice(-2);
-    const [[{ lastStudId }]] = await db.query('SELECT COALESCE(MAX(id),0) as lastStudId FROM students');
+    const admission_no = await getNextSequentialAdmissionNo();
     const [[{ lastTeachId }]] = await db.query('SELECT COALESCE(MAX(id),0) as lastTeachId FROM teachers');
-    const admission_no = `ADM${year}${String(lastStudId + 1).padStart(4, '0')}`;
     const employee_id = `EMP${year}${String(lastTeachId + 1).padStart(4, '0')}`;
     let roll_number = 1;
     const class_id = parseInt(req.query.class_id) || null;
@@ -297,9 +334,7 @@ router.post('/students/add', upload.single('profile_photo'), async (req, res) =>
   try {
     // Auto-generate admission_no if blank
     if (!admission_no || admission_no.trim() === '') {
-      const [[{ lastId }]] = await db.query('SELECT COALESCE(MAX(id),0) as lastId FROM students');
-      const year = new Date().getFullYear().toString().slice(-2);
-      admission_no = `ADM${year}${String(lastId + 1).padStart(4, '0')}`;
+      admission_no = await getNextSequentialAdmissionNo();
     }
     // Auto-generate roll_number if blank
     if ((!roll_number || roll_number.toString().trim() === '') && class_id) {
@@ -979,38 +1014,164 @@ router.get('/fees/receipt/:id', async (req, res) => {
   }
 });
 
+// ==================== PENDING FEE ENGINE ====================
+async function getPendingFeeReport({ class_id = null, student_id = null, up_to_month = null } = {}) {
+  const sessionMonthsOrder = ['APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC', 'JAN', 'FEB', 'MAR'];
+  const calMonthToSession = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+  
+  const currentCalMonth = new Date().getMonth();
+  const currentOngoingMonth = calMonthToSession[currentCalMonth];
+  const targetMonth = (up_to_month && sessionMonthsOrder.includes(up_to_month.toUpperCase()))
+    ? up_to_month.toUpperCase()
+    : currentOngoingMonth;
+
+  const targetIndex = sessionMonthsOrder.indexOf(targetMonth);
+  const expectedMonths = targetIndex >= 0 
+    ? sessionMonthsOrder.slice(0, targetIndex + 1) 
+    : sessionMonthsOrder.slice(0, sessionMonthsOrder.indexOf(currentOngoingMonth) + 1);
+
+  // Query students
+  let query = `
+    SELECT s.*, u.name, u.email, u.phone, u.address,
+           c.name as class_name, c.section, c.academic_year
+    FROM students s
+    JOIN users u ON s.user_id = u.id
+    LEFT JOIN classes c ON s.class_id = c.id
+    WHERE 1=1
+  `;
+  const params = [];
+  if (class_id) {
+    query += ` AND s.class_id = ?`;
+    params.push(class_id);
+  }
+  if (student_id) {
+    query += ` AND s.id = ?`;
+    params.push(student_id);
+  }
+  query += ` ORDER BY (s.roll_number IS NULL OR s.roll_number = 0), s.roll_number ASC, u.name ASC`;
+
+  const [students] = await db.query(query, params);
+  if (!students.length) {
+    return { students: [], targetMonth, currentOngoingMonth, expectedMonths, sessionMonthsOrder };
+  }
+
+  // Fetch fee structures by class
+  const [feeStructures] = await db.query('SELECT * FROM fee_structure');
+  const classFeeMap = {};
+  feeStructures.forEach(fs => {
+    if (!classFeeMap[fs.class_id]) classFeeMap[fs.class_id] = [];
+    classFeeMap[fs.class_id].push(fs);
+  });
+
+  // Fetch all fee payments for these students
+  const studentIds = students.map(s => s.id);
+  const [payments] = await db.query(
+    `SELECT student_id, amount_paid, months_paid, breakdown_json FROM fee_payments WHERE student_id IN (?)`,
+    [studentIds]
+  );
+  const studentPaymentsMap = {};
+  payments.forEach(p => {
+    if (!studentPaymentsMap[p.student_id]) studentPaymentsMap[p.student_id] = [];
+    studentPaymentsMap[p.student_id].push(p);
+  });
+
+  const pendingList = [];
+
+  for (const s of students) {
+    // 1. Determine monthly tuition fee
+    const structs = classFeeMap[s.class_id] || [];
+    let monthlyTuition = 0;
+    if (structs.length > 0) {
+      const tuitionStruct = structs.find(st => st.fee_type && /tuit|tuition/i.test(st.fee_type)) || structs[0];
+      monthlyTuition = parseFloat(tuitionStruct.amount) || 0;
+    }
+    if (monthlyTuition <= 0) monthlyTuition = 500; // fallback sensible default
+
+    // 2. Transport fee
+    const monthlyVan = (s.uses_transport == 1 || s.uses_transport === true) ? (parseFloat(s.transport_fee) || 0) : 0;
+    const monthlyRate = monthlyTuition + monthlyVan;
+
+    // 3. Paid months
+    const sPayments = studentPaymentsMap[s.id] || [];
+    const paidMonthsSet = new Set();
+    let totalPaidAmt = 0;
+    sPayments.forEach(p => {
+      totalPaidAmt += parseFloat(p.amount_paid) || 0;
+      if (p.months_paid) {
+        p.months_paid.split(',').forEach(m => {
+          const clean = m.trim().toUpperCase();
+          if (clean) paidMonthsSet.add(clean);
+        });
+      }
+    });
+
+    // 4. Pending months up to targetMonth
+    const unpaidMonths = expectedMonths.filter(m => !paidMonthsSet.has(m));
+    const pendingMonthsCount = unpaidMonths.length;
+    const sessionDue = pendingMonthsCount * monthlyRate;
+    const prevBalance = parseFloat(s.previous_balance) || 0;
+    const totalDue = sessionDue + prevBalance;
+
+    if (totalDue > 0) {
+      pendingList.push({
+        student_id: s.id,
+        id: s.id,
+        name: s.name,
+        admission_no: s.admission_no,
+        roll_number: s.roll_number,
+        class_id: s.class_id,
+        class_name: s.class_name,
+        section: s.section,
+        phone: s.phone,
+        address: s.address,
+        father_name: s.father_name,
+        uses_transport: s.uses_transport,
+        transport_route: s.transport_route,
+        monthly_tuition: monthlyTuition,
+        monthly_van: monthlyVan,
+        monthly_rate: monthlyRate,
+        paid_months: Array.from(paidMonthsSet).join(', ') || 'None',
+        unpaid_months: unpaidMonths,
+        pending_months_text: unpaidMonths.join(', ') || 'None',
+        pending_months_count: pendingMonthsCount,
+        session_due: sessionDue,
+        previous_balance: prevBalance,
+        previous_balance_remarks: s.previous_balance_remarks,
+        total_fees: sessionDue + prevBalance,
+        paid: totalPaidAmt,
+        balance: totalDue
+      });
+    }
+  }
+
+  return {
+    students: pendingList,
+    targetMonth,
+    currentOngoingMonth,
+    expectedMonths,
+    sessionMonthsOrder
+  };
+}
+
 // Fee Reminder Notice PDF
 router.get('/fees/reminder/:studentId', async (req, res) => {
   try {
-    const [students] = await db.query(`SELECT s.*, u.name as student_name, u.email, u.phone, c.name as class_name, c.section, u.address
-      FROM students s JOIN users u ON s.user_id=u.id LEFT JOIN classes c ON s.class_id=c.id WHERE s.id=?`, [req.params.studentId]);
-    if (!students.length) return res.status(404).send('Student not found');
-    const student = students[0];
-
+    const studentId = parseInt(req.params.studentId, 10);
+    const report = await getPendingFeeReport({ student_id: studentId, up_to_month: req.query.up_to_month });
+    if (!report.students.length) {
+      return res.send(`
+        <script>
+          alert('This student has cleared all fees up to ${report.targetMonth}!');
+          window.close();
+        </script>
+      `);
+    }
+    const student = report.students[0];
     const [classFeeStructure] = await db.query('SELECT * FROM fee_structure WHERE class_id=?', [student.class_id]);
-
-    const [[feeSummary]] = await db.query(`
-      SELECT COALESCE(SUM(amount), 0) as total_fees
-      FROM fee_structure 
-      WHERE class_id=?`, [student.class_id]);
-
-    const [[paidSummary]] = await db.query(`
-      SELECT COALESCE(SUM(amount_paid), 0) as paid
-      FROM fee_payments 
-      WHERE student_id=?`, [student.id]);
-
-    const prevBal = parseFloat(student.previous_balance || 0);
-    const currFees = feeSummary ? parseFloat(feeSummary.total_fees || 0) : 0;
-    const paidFees = paidSummary ? parseFloat(paidSummary.paid || 0) : 0;
-
-    student.total_fees = currFees + prevBal;
-    student.paid = paidFees;
-    student.balance = Math.max(0, student.total_fees - student.paid);
-
     const selectedClass = { name: student.class_name, section: student.section, id: student.class_id };
     generateClassFeeRemindersHindiPDF(res, selectedClass, [student], classFeeStructure);
   } catch (err) {
-    console.error(err);
+    console.error('Error generating notice:', err);
     res.status(500).send('Error generating notice: ' + err.message);
   }
 });
@@ -1022,48 +1183,18 @@ router.get('/fees/reminder-class/:classId', async (req, res) => {
     const [[selectedClass]] = await db.query('SELECT * FROM classes WHERE id=?', [classId]);
     if (!selectedClass) return res.status(404).send('Class not found');
 
-    const [classFeeStructure] = await db.query('SELECT * FROM fee_structure WHERE class_id=?', [classId]);
-
-    const [studentsWithPending] = await db.query(`
-      SELECT 
-        s.id as student_id, 
-        u.name, 
-        s.admission_no, 
-        s.roll_number, 
-        c.name as class_name, 
-        c.section,
-        COALESCE(s.previous_balance, 0) as previous_balance,
-        s.previous_balance_remarks,
-        COALESCE(fee_totals.total_fees, 0) as total_fees,
-        COALESCE(paid_totals.paid, 0) as paid,
-        (COALESCE(fee_totals.total_fees, 0) + COALESCE(s.previous_balance, 0) - COALESCE(paid_totals.paid, 0)) as balance
-      FROM students s 
-      JOIN users u ON s.user_id=u.id 
-      LEFT JOIN classes c ON s.class_id=c.id
-      LEFT JOIN (
-        SELECT class_id, SUM(amount) as total_fees
-        FROM fee_structure
-        GROUP BY class_id
-      ) fee_totals ON fee_totals.class_id = s.class_id
-      LEFT JOIN (
-        SELECT student_id, SUM(amount_paid) as paid
-        FROM fee_payments
-        GROUP BY student_id
-      ) paid_totals ON paid_totals.student_id = s.id
-      WHERE s.class_id=? 
-      HAVING balance > 0 
-      ORDER BY s.roll_number, u.name`, [classId]);
-
-    if (!studentsWithPending.length) {
+    const report = await getPendingFeeReport({ class_id: classId, up_to_month: req.query.up_to_month });
+    if (!report.students.length) {
       return res.send(`
         <script>
-          alert('No students with pending fees in this class!');
+          alert('No students with pending fees in this class up to ${report.targetMonth}!');
           window.close();
         </script>
       `);
     }
 
-    generateClassFeeRemindersHindiPDF(res, selectedClass, studentsWithPending, classFeeStructure);
+    const [classFeeStructure] = await db.query('SELECT * FROM fee_structure WHERE class_id=?', [classId]);
+    generateClassFeeRemindersHindiPDF(res, selectedClass, report.students, classFeeStructure);
   } catch (err) {
     console.error('Error generating class fee reminders:', err);
     res.status(500).send('Error generating class fee reminders: ' + err.message);
@@ -1072,40 +1203,50 @@ router.get('/fees/reminder-class/:classId', async (req, res) => {
 
 // Pending Fees List
 router.get('/fees/pending', async (req, res) => {
-  const [classes] = await db.query('SELECT * FROM classes ORDER BY name, section');
-  const { class_id } = req.query;
-  let pendingFees = [];
-  if (class_id) {
-    [pendingFees] = await db.query(`
-      SELECT 
-        s.id as student_id, 
-        u.name, 
-        s.admission_no, 
-        c.name as class_name, 
-        c.section,
-        COALESCE(s.previous_balance, 0) as previous_balance,
-        s.previous_balance_remarks,
-        COALESCE(fee_totals.total_fees, 0) as total_fees,
-        COALESCE(paid_totals.paid, 0) as paid,
-        (COALESCE(fee_totals.total_fees, 0) + COALESCE(s.previous_balance, 0) - COALESCE(paid_totals.paid, 0)) as balance
-      FROM students s 
-      JOIN users u ON s.user_id=u.id 
-      LEFT JOIN classes c ON s.class_id=c.id
-      LEFT JOIN (
-        SELECT class_id, SUM(amount) as total_fees
-        FROM fee_structure
-        GROUP BY class_id
-      ) fee_totals ON fee_totals.class_id = s.class_id
-      LEFT JOIN (
-        SELECT student_id, SUM(amount_paid) as paid
-        FROM fee_payments
-        GROUP BY student_id
-      ) paid_totals ON paid_totals.student_id = s.id
-      WHERE s.class_id=? 
-      HAVING balance > 0 
-      ORDER BY balance DESC`, [class_id]);
+  try {
+    const [classes] = await db.query('SELECT * FROM classes ORDER BY name, section');
+    const class_id = parseInt(req.query.class_id) || null;
+    const up_to_month = req.query.up_to_month || null;
+
+    let pendingFees = [];
+    let reportInfo = {
+      targetMonth: 'DEC',
+      currentOngoingMonth: 'OCT',
+      sessionMonthsOrder: ['APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC', 'JAN', 'FEB', 'MAR'],
+      expectedMonths: []
+    };
+
+    if (class_id) {
+      const report = await getPendingFeeReport({ class_id, up_to_month });
+      pendingFees = report.students;
+      reportInfo = report;
+    } else {
+      // Provide targetMonth even if class is not yet selected
+      const currentCalMonth = new Date().getMonth();
+      const calMonthToSession = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+      reportInfo.currentOngoingMonth = calMonthToSession[currentCalMonth];
+      reportInfo.targetMonth = (up_to_month && reportInfo.sessionMonthsOrder.includes(up_to_month.toUpperCase()))
+        ? up_to_month.toUpperCase()
+        : reportInfo.currentOngoingMonth;
+      const targetIdx = reportInfo.sessionMonthsOrder.indexOf(reportInfo.targetMonth);
+      reportInfo.expectedMonths = reportInfo.sessionMonthsOrder.slice(0, targetIdx + 1);
+    }
+
+    res.render('admin/fee-pending', {
+      title: 'Pending Fees',
+      classes,
+      pendingFees,
+      class_id,
+      targetMonth: reportInfo.targetMonth,
+      currentOngoingMonth: reportInfo.currentOngoingMonth,
+      sessionMonthsOrder: reportInfo.sessionMonthsOrder,
+      expectedMonths: reportInfo.expectedMonths
+    });
+  } catch (err) {
+    console.error('Pending fees error:', err);
+    req.flash('error_msg', 'Error loading pending fees: ' + err.message);
+    res.redirect('/admin');
   }
-  res.render('admin/fee-pending', { title: 'Pending Fees', classes, pendingFees, class_id });
 });
 
 // Fee Payment History Ledger

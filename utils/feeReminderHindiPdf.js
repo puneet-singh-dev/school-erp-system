@@ -77,8 +77,11 @@ function drawSingleHindiReminderSlip(doc, student, pendingFees, y, height) {
   doc.font('Hindi').fontSize(7.5);
 
   let feeTypesText = pendingFees && pendingFees.length > 0 ? pendingFees.map(f => f.fee_type).join(', ') : 'समस्त बकाया विद्यालय शुल्क';
+  if (student.pending_months_text && student.pending_months_text !== 'None') {
+    feeTypesText = `बकाया माह: ${student.pending_months_text}`;
+  }
   if (parseFloat(student.previous_balance || 0) > 0) {
-    feeTypesText += ` (पूर्व कक्षा/सत्र बकाया: ₹${parseFloat(student.previous_balance).toFixed(0)})`;
+    feeTypesText += ` (पूर्व सत्र बकाया: ₹${parseFloat(student.previous_balance).toFixed(0)})`;
   }
   const totalAmount = parseFloat(student.total_fees || 0);
   const paidAmount = parseFloat(student.paid || 0);

@@ -17,9 +17,9 @@ document.querySelectorAll('.sidebar-nav a').forEach(link => {
   }
 });
 
-// Auto dismiss alerts after 4 seconds
+// Auto dismiss flash message alerts after 4 seconds (exclude permanent cards and receipt banners)
 setTimeout(() => {
-  document.querySelectorAll('.alert').forEach(alert => {
+  document.querySelectorAll('.alert.alert-dismissible:not(.alert-permanent)').forEach(alert => {
     const bsAlert = bootstrap.Alert.getOrCreateInstance(alert);
     if (bsAlert) bsAlert.close();
   });
