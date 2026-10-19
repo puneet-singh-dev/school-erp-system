@@ -172,9 +172,19 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background:
   .sidebar.open { left: 0; }
 }
 
+/* ==================== APP FOOTER ==================== */
+.app-footer {
+  background: #ffffff;
+  border-top: 1px solid #e2e8f0;
+  padding: 14px 24px;
+  font-size: 0.85rem;
+  color: #475569;
+  margin-top: auto;
+}
+
 /* ==================== PRINT ==================== */
 @media print {
-  .sidebar, .topbar, .btn, form { display: none !important; }
+  .sidebar, .topbar, .btn, form, .app-footer { display: none !important; }
   .main-content { margin: 0; }
   .card { box-shadow: none; }
 }

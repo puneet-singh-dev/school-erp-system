@@ -1,6 +1,16 @@
-<div class="d-flex justify-content-between align-items-center mb-4">
-  <h5 class="fw-bold mb-0"><i class="fa-solid fa-user-graduate text-primary me-2"></i>Students Management</h5>
-  <a href="/admin/students/add" class="btn btn-primary"><i class="fa-solid fa-plus me-2"></i>Add Student</a>
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+  <div>
+    <h5 class="fw-bold mb-1"><i class="fa-solid fa-user-graduate text-primary me-2"></i>Students Management</h5>
+    <small class="text-muted">Manage student records, customize and print student list PDFs</small>
+  </div>
+  <div class="d-flex gap-2">
+    <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#exportPdfModal">
+      <i class="fa-solid fa-file-pdf me-2"></i>Print Student List PDF
+    </button>
+    <a href="/admin/students/add" class="btn btn-primary">
+      <i class="fa-solid fa-plus me-2"></i>Add Student
+    </a>
+  </div>
 </div>
 
 <!-- Filters -->
@@ -8,98 +18,357 @@
   <div class="card-body">
     <form method="GET" class="row g-3 align-items-end">
       <div class="col-md-5">
-        <label class="form-label">Search</label>
-        <input type="text" name="search" class="form-control" placeholder="Name, Admission No, Email..." value="<%- search %>">
+        <label class="form-label fw-semibold">Search Student</label>
+        <div class="input-group">
+          <span class="input-group-text bg-white"><i class="fa-solid fa-magnifying-glass text-muted"></i></span>
+          <input type="text" name="search" class="form-control" placeholder="Name, Father Name, Admission No, Mobile..." value="<%- search %>">
+        </div>
       </div>
       <div class="col-md-4">
-        <label class="form-label">Filter by Class</label>
-        <select name="class_id" class="form-select">
+        <label class="form-label fw-semibold">Filter by Class</label>
+        <select name="class_id" class="form-select" onchange="this.form.submit()">
           <option value="">All Classes</option>
           <% classes.forEach(c => { %>
-          <option value="<%- c.id %>" <%- classFilter == c.id ? 'selected' : '' %>><%- c.name %> - <%- c.section %></option>
+          <option value="<%- c.id %>" <%- classFilter == c.id ? 'selected' : '' %>><%- c.name %> - <%- c.section %> (<%- c.academic_year || '2026-27' %>)</option>
           <% }) %>
         </select>
       </div>
-      <div class="col-md-3">
-        <button type="submit" class="btn btn-primary w-100"><i class="fa-solid fa-search me-1"></i>Filter</button>
+      <div class="col-md-3 d-flex gap-2">
+        <button type="submit" class="btn btn-primary flex-grow-1"><i class="fa-solid fa-filter me-1"></i>Filter</button>
+        <% if (search || classFilter) { %>
+          <a href="/admin/students" class="btn btn-outline-secondary" title="Reset Filters"><i class="fa-solid fa-rotate-left"></i></a>
+        <% } %>
       </div>
     </form>
   </div>
 </div>
 
-<div class="card shadow-sm">
+<!-- Clean & Simple Student Information Table -->
+<div class="card shadow-sm border-0">
   <div class="card-body p-0">
     <div class="table-responsive">
       <table class="table table-hover align-middle mb-0">
         <thead class="table-dark">
           <tr>
-            <th>#</th><th>Name</th><th>Adm. No</th><th>Class</th><th>Guardian</th><th>Phone</th><th>Status</th><th>Actions</th>
+            <th class="text-center" style="width: 45px;">#</th>
+            <th class="text-center" style="width: 65px;">Roll No</th>
+            <th>Student Name</th>
+            <th>Father's Name</th>
+            <th>Class</th>
+            <th>Mobile No</th>
+            <th>DOB</th>
+            <th>Aadhaar No</th>
+            <th>Van</th>
+            <th class="text-end pe-3" style="width: 120px;">Actions</th>
           </tr>
         </thead>
         <tbody>
           <% if(students.length > 0) { %>
             <% students.forEach((s, i) => { %>
             <tr>
-              <td><%- i+1 %></td>
+              <td class="text-center text-muted fw-semibold"><%- i+1 %></td>
+              <td class="text-center">
+                <% if (s.roll_number) { %>
+                  <span class="badge bg-primary fs-6 px-2 py-1"><%- s.roll_number %></span>
+                <% } else { %>
+                  <span class="text-muted">-</span>
+                <% } %>
+              </td>
               <td>
                 <div class="d-flex align-items-center gap-2">
                   <% if (s.profile_photo && s.profile_photo !== 'default.png') { %>
-                    <img src="/uploads/students/<%- s.profile_photo %>" alt="<%- s.name %>" class="rounded-circle border shadow-sm" style="width: 38px; height: 38px; object-fit: cover;">
+                    <img src="/uploads/students/<%- s.profile_photo %>" alt="<%- s.name %>" class="rounded-circle border shadow-sm" style="width: 32px; height: 32px; object-fit: cover;">
                   <% } else { %>
-                    <div class="avatar-circle"><%- s.name.charAt(0) %></div>
+                    <div class="avatar-circle" style="width: 32px; height: 32px; font-size: 0.85rem;"><%- s.name.charAt(0) %></div>
                   <% } %>
                   <div>
-                    <div class="fw-semibold"><%- s.name %></div>
-                    <small class="text-muted"><%- s.email %></small>
+                    <span class="fw-bold text-dark"><%- s.name %></span>
+                    <small class="text-muted d-block" style="font-size: 0.75rem;">Adm: <%- s.admission_no %></small>
                   </div>
                 </div>
               </td>
               <td>
-                <span class="badge bg-secondary"><%- s.admission_no %></span>
-                <% if (s.roll_number) { %><small class="text-muted d-block">Roll: <%- s.roll_number %></small><% } %>
-                <% if (s.previous_balance && parseFloat(s.previous_balance) > 0) { %>
-                  <span class="badge bg-danger-subtle text-danger border border-danger d-block mt-1" style="font-size: 0.7rem;" title="Previous Balance: ₹<%- parseFloat(s.previous_balance).toFixed(2) %><%- s.previous_balance_remarks ? ' (' + s.previous_balance_remarks + ')' : '' %>">
-                    <i class="fa-solid fa-clock-rotate-left me-1"></i>Prev: ₹<%- parseFloat(s.previous_balance).toLocaleString('en-IN') %>
-                  </span>
+                <span class="fw-semibold text-secondary"><%- s.father_name || s.guardian_name || '-' %></span>
+              </td>
+              <td>
+                <span class="badge bg-light text-dark border">
+                  <%- s.class_name ? s.class_name + ' - ' + s.section : 'Unassigned' %>
+                </span>
+              </td>
+              <td>
+                <% const phoneNum = s.phone || s.guardian_phone; %>
+                <% if (phoneNum) { %>
+                  <a href="tel:<%- phoneNum %>" class="text-decoration-none text-dark">
+                    <i class="fa-solid fa-phone text-muted me-1 small"></i><%- phoneNum %>
+                  </a>
+                <% } else { %>
+                  <span class="text-muted">-</span>
                 <% } %>
               </td>
               <td>
-                <%- s.class_name ? s.class_name + ' - ' + s.section : '<span class="text-muted">Not assigned</span>' %>
+                <% if (s.date_of_birth) { %>
+                  <small class="text-muted"><%- new Date(s.date_of_birth).toLocaleDateString('en-IN') %></small>
+                <% } else { %>
+                  <span class="text-muted">-</span>
+                <% } %>
+              </td>
+              <td>
+                <% if (s.aadhaar_no) { %>
+                  <small class="fw-semibold text-dark"><%- s.aadhaar_no %></small>
+                <% } else { %>
+                  <span class="text-muted small">Not provided</span>
+                <% } %>
+              </td>
+              <td>
                 <% if (s.uses_transport) { %>
-                  <span class="badge bg-success-subtle text-success border border-success d-block mt-1" style="font-size: 0.7rem;" title="School Van: <%- s.transport_route || 'Standard Route' %>">
-                    <i class="fa-solid fa-van-shuttle me-1"></i>Van: ₹<%- parseFloat(s.transport_fee || 0).toFixed(0) %>/mo
+                  <span class="badge bg-success-subtle text-success border border-success px-2 py-1" title="Route: <%- s.transport_route || 'Standard' %>">
+                    <i class="fa-solid fa-van-shuttle me-1"></i>₹<%- parseFloat(s.transport_fee || 0).toFixed(0) %>
                   </span>
                 <% } else { %>
-                  <span class="badge bg-light text-muted border d-block mt-1" style="font-size: 0.68rem;" title="No School Van / Own Transport">
-                    <i class="fa-solid fa-person-walking me-1"></i>No Van
-                  </span>
+                  <span class="text-muted small">Self</span>
                 <% } %>
               </td>
-              <td>
-                <div><i class="fa-solid fa-user-tie text-muted me-1" style="font-size: 0.8rem;"></i><%- s.father_name || s.guardian_name || '-' %></div>
-                <% if(s.mother_name) { %>
-                  <small class="text-muted"><i class="fa-solid fa-person-breastfeeding text-muted me-1"></i><%- s.mother_name %></small>
-                <% } %>
-              </td>
-              <td><%- s.phone || s.guardian_phone || '-' %></td>
-              <td><span class="badge <%- s.is_active ? 'bg-success' : 'bg-danger' %>"><%- s.is_active ? 'Active' : 'Inactive' %></span></td>
-              <td>
+              <td class="text-end pe-3">
                 <div class="btn-group btn-group-sm">
-                  <a href="/admin/students/edit/<%- s.id %>" class="btn btn-outline-primary" title="Edit"><i class="fa-solid fa-pen"></i></a>
-                  <a href="/admin/fees/reminder/<%- s.id %>" target="_blank" class="btn btn-outline-warning" title="Fee Reminder"><i class="fa-solid fa-bell"></i></a>
-                  <form action="/admin/students/delete/<%- s.id %>" method="POST" onsubmit="return confirm('Delete this student?')">
-                    <button type="submit" class="btn btn-outline-danger" title="Delete"><i class="fa-solid fa-trash"></i></button>
+                  <a href="/admin/fees/collect?class_id=<%- s.class_id %>&student_id=<%- s.id %>" class="btn btn-outline-success" title="Collect Fee">
+                    <i class="fa-solid fa-hand-holding-dollar"></i>
+                  </a>
+                  <a href="/admin/students/edit/<%- s.id %>" class="btn btn-outline-primary" title="Edit Student">
+                    <i class="fa-solid fa-pen"></i>
+                  </a>
+                  <form action="/admin/students/delete/<%- s.id %>" method="POST" class="d-inline" onsubmit="return confirm('Delete student <%- s.name %>?')">
+                    <button type="submit" class="btn btn-outline-danger" title="Delete">
+                      <i class="fa-solid fa-trash"></i>
+                    </button>
                   </form>
                 </div>
               </td>
             </tr>
             <% }) %>
           <% } else { %>
-            <tr><td colspan="8" class="text-center text-muted py-5"><i class="fa-solid fa-inbox fa-2x mb-2 d-block"></i>No students found</td></tr>
+            <tr>
+              <td colspan="10" class="text-center text-muted py-5">
+                <i class="fa-solid fa-inbox fa-3x mb-2 d-block opacity-25"></i>
+                No students found matching your criteria.
+              </td>
+            </tr>
           <% } %>
         </tbody>
       </table>
     </div>
-    <div class="card-footer text-muted">Total: <strong><%- students.length %></strong> students</div>
+    <div class="card-footer bg-white d-flex justify-content-between align-items-center py-3">
+      <span class="text-muted small">Showing <strong><%- students.length %></strong> student records</span>
+      <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#exportPdfModal">
+        <i class="fa-solid fa-print me-1"></i>Customize & Print PDF
+      </button>
+    </div>
   </div>
 </div>
+
+<!-- ==================== MODAL: CUSTOMIZE STUDENT LIST PDF ==================== -->
+<div class="modal fade" id="exportPdfModal" tabindex="-1" aria-labelledby="exportPdfModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content border-0 shadow">
+      <form action="/admin/students/export-pdf" method="GET" target="_blank">
+        <div class="modal-header bg-primary text-white py-3">
+          <h6 class="modal-title fw-bold" id="exportPdfModalLabel">
+            <i class="fa-solid fa-file-pdf me-2"></i>Customize Student List PDF
+          </h6>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        
+        <div class="modal-body p-4">
+          <div class="alert alert-info py-2 small mb-4">
+            <i class="fa-solid fa-circle-info me-1"></i>
+            Select which class to print and choose only the columns you want. The PDF header will contain <strong>only School Name, Class, and Class Teacher</strong>.
+          </div>
+
+          <!-- Step 1: Select Class & Sort -->
+          <div class="row g-3 mb-4">
+            <div class="col-md-7">
+              <label class="form-label fw-bold">Select Class *</label>
+              <select name="class_id" class="form-select" id="pdfClassSelect">
+                <option value="">All Classes (Complete School)</option>
+                <% classes.forEach(c => { %>
+                  <option value="<%- c.id %>" <%- classFilter == c.id ? 'selected' : '' %>>
+                    <%- c.name %> - <%- c.section %> (<%- c.academic_year || '2026-27' %>)
+                  </option>
+                <% }) %>
+              </select>
+            </div>
+            <div class="col-md-5">
+              <label class="form-label fw-bold">Sort Students By</label>
+              <select name="sort_by" class="form-select">
+                <option value="roll_number" selected>Roll Number (1, 2, 3...)</option>
+                <option value="name">Student Name (A to Z)</option>
+                <option value="admission_no">Admission Number</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Step 2: Quick Preset Buttons -->
+          <div class="mb-3">
+            <label class="form-label fw-bold mb-2 text-dark">
+              <i class="fa-solid fa-table-columns text-primary me-1"></i>Choose Information / Columns to Include:
+            </label>
+            <div class="d-flex flex-wrap gap-2 mb-3">
+              <span class="small text-muted align-self-center me-1">Quick Presets:</span>
+              <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2 small" onclick="applyPreset('standard')">
+                <i class="fa-solid fa-star me-1 text-warning"></i>Standard List
+              </button>
+              <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2 small" onclick="applyPreset('register')">
+                <i class="fa-solid fa-address-book me-1 text-primary"></i>Aadhaar & Register
+              </button>
+              <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2 small" onclick="applyPreset('van')">
+                <i class="fa-solid fa-van-shuttle me-1 text-success"></i>Van / Transport
+              </button>
+              <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2 small" onclick="applyPreset('all')">
+                Select All
+              </button>
+            </div>
+          </div>
+
+          <!-- Column Checkboxes Grid -->
+          <div class="p-3 bg-light rounded-3 border">
+            <div class="row g-3">
+              <!-- Essential Fields -->
+              <div class="col-md-4">
+                <div class="form-check">
+                  <input class="form-check-input col-chk" type="checkbox" name="fields" value="roll_number" id="chk_roll" checked>
+                  <label class="form-check-label fw-semibold" for="chk_roll">
+                    <i class="fa-solid fa-hashtag text-muted me-1"></i>Roll Number
+                  </label>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="form-check">
+                  <input class="form-check-input col-chk" type="checkbox" name="fields" value="name" id="chk_name" checked>
+                  <label class="form-check-label fw-semibold" for="chk_name">
+                    <i class="fa-solid fa-user text-muted me-1"></i>Student Name
+                  </label>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="form-check">
+                  <input class="form-check-input col-chk" type="checkbox" name="fields" value="father_name" id="chk_father" checked>
+                  <label class="form-check-label fw-semibold" for="chk_father">
+                    <i class="fa-solid fa-user-tie text-muted me-1"></i>Father's Name
+                  </label>
+                </div>
+              </div>
+
+              <!-- Extra Important Information -->
+              <div class="col-md-4">
+                <div class="form-check">
+                  <input class="form-check-input col-chk" type="checkbox" name="fields" value="date_of_birth" id="chk_dob" checked>
+                  <label class="form-check-label fw-semibold" for="chk_dob">
+                    <i class="fa-solid fa-cake-candles text-muted me-1"></i>Date of Birth (DOB)
+                  </label>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="form-check">
+                  <input class="form-check-input col-chk" type="checkbox" name="fields" value="aadhaar_no" id="chk_aadhaar" checked>
+                  <label class="form-check-label fw-semibold" for="chk_aadhaar">
+                    <i class="fa-solid fa-id-card text-muted me-1"></i>Aadhaar Number
+                  </label>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="form-check">
+                  <input class="form-check-input col-chk" type="checkbox" name="fields" value="phone" id="chk_phone" checked>
+                  <label class="form-check-label fw-semibold" for="chk_phone">
+                    <i class="fa-solid fa-phone text-muted me-1"></i>Mobile / Phone No
+                  </label>
+                </div>
+              </div>
+
+              <!-- Other Fields -->
+              <div class="col-md-4">
+                <div class="form-check">
+                  <input class="form-check-input col-chk" type="checkbox" name="fields" value="admission_no" id="chk_adm">
+                  <label class="form-check-label" for="chk_adm">
+                    <i class="fa-solid fa-id-badge text-muted me-1"></i>Admission Number
+                  </label>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="form-check">
+                  <input class="form-check-input col-chk" type="checkbox" name="fields" value="mother_name" id="chk_mother">
+                  <label class="form-check-label" for="chk_mother">
+                    <i class="fa-solid fa-person-dress text-muted me-1"></i>Mother's Name
+                  </label>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="form-check">
+                  <input class="form-check-input col-chk" type="checkbox" name="fields" value="gender" id="chk_gender">
+                  <label class="form-check-label" for="chk_gender">
+                    <i class="fa-solid fa-venus-mars text-muted me-1"></i>Gender
+                  </label>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="form-check">
+                  <input class="form-check-input col-chk" type="checkbox" name="fields" value="category" id="chk_category">
+                  <label class="form-check-label" for="chk_category">
+                    <i class="fa-solid fa-layer-group text-muted me-1"></i>Category (Gen/OBC/SC/ST)
+                  </label>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="form-check">
+                  <input class="form-check-input col-chk" type="checkbox" name="fields" value="transport" id="chk_transport">
+                  <label class="form-check-label" for="chk_transport">
+                    <i class="fa-solid fa-van-shuttle text-muted me-1"></i>Van / Transport Route
+                  </label>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="form-check">
+                  <input class="form-check-input col-chk" type="checkbox" name="fields" value="address" id="chk_address">
+                  <label class="form-check-label" for="chk_address">
+                    <i class="fa-solid fa-location-dot text-muted me-1"></i>Address
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer bg-light py-2">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary px-4">
+            <i class="fa-solid fa-print me-2"></i>Generate PDF
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function applyPreset(type) {
+  const allCheckboxes = document.querySelectorAll('.col-chk');
+  allCheckboxes.forEach(cb => { cb.checked = false; });
+
+  if (type === 'standard') {
+    ['chk_roll', 'chk_name', 'chk_father', 'chk_phone'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.checked = true;
+    });
+  } else if (type === 'register') {
+    ['chk_roll', 'chk_adm', 'chk_name', 'chk_father', 'chk_dob', 'chk_aadhaar', 'chk_phone'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.checked = true;
+    });
+  } else if (type === 'van') {
+    ['chk_roll', 'chk_name', 'chk_father', 'chk_phone', 'chk_transport'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.checked = true;
+    });
+  } else if (type === 'all') {
+    allCheckboxes.forEach(cb => { cb.checked = true; });
+  }
+}
+</script>

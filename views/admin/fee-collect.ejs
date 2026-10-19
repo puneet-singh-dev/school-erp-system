@@ -1,7 +1,7 @@
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
   <div>
     <h5 class="fw-bold mb-1"><i class="fa-solid fa-hand-holding-dollar text-success me-2"></i>Fee Collection</h5>
-    <small class="text-muted">Collect month-wise tuition and add individual components (ID Card, Annual, Diary, Development, etc.)</small>
+    <small class="text-muted">Fast & easy fee collection with automated monthly tuition and simplified van fee system</small>
   </div>
   <a href="/admin/fees" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-arrow-left me-1"></i>Back to Fees</a>
 </div>
@@ -12,7 +12,7 @@
   <div>
     <i class="fa-solid fa-circle-check fs-4 text-success me-2 align-middle"></i>
     <strong class="align-middle">Fee payment successfully recorded!</strong>
-    <span class="ms-2 text-muted align-middle">You can print the A4 dual-copy fee receipt now.</span>
+    <span class="ms-2 text-muted align-middle">Dual-copy fee receipt is ready to print.</span>
   </div>
   <a href="/admin/fees/receipt/<%- new_receipt_id %>" target="_blank" class="btn btn-success">
     <i class="fa-solid fa-print me-1"></i>Print Fee Receipt
@@ -21,32 +21,34 @@
 <% } %>
 
 <!-- Step 1: Select Class & Student -->
-<div class="card shadow-sm mb-4">
-  <div class="card-body">
+<div class="card shadow-sm mb-4 border-0">
+  <div class="card-body p-3">
     <form method="GET" class="row g-3 align-items-end">
       <div class="col-md-5">
-        <label class="form-label fw-semibold">Select Class *</label>
+        <label class="form-label fw-bold small text-muted">1. Select Class *</label>
         <select name="class_id" class="form-select" onchange="this.form.submit()">
           <option value="">-- Choose Class --</option>
           <% classes.forEach(c => { %>
-            <option value="<%- c.id %>" <%- class_id == c.id ? 'selected' : '' %>><%- c.name %> - <%- c.section %> (Session <%- c.academic_year || '2026-27' %>)</option>
+            <option value="<%- c.id %>" <%- class_id == c.id ? 'selected' : '' %>><%- c.name %> - <%- c.section %> (<%- c.academic_year || '2026-27' %>)</option>
           <% }) %>
         </select>
       </div>
       <% if(students.length > 0) { %>
       <div class="col-md-5">
-        <label class="form-label fw-semibold">Select Student *</label>
+        <label class="form-label fw-bold small text-muted">2. Select Student *</label>
         <select name="student_id" class="form-select" onchange="this.form.submit()">
           <option value="">-- Choose Student --</option>
           <% students.forEach(s => { %>
-            <option value="<%- s.id %>" <%- student_id == s.id ? 'selected' : '' %>><%- s.name %> (Adm: <%- s.admission_no %> | Roll: <%- s.roll_number || '-' %>)</option>
+            <option value="<%- s.id %>" <%- student_id == s.id ? 'selected' : '' %>>
+              <%- s.name %> (Roll: <%- s.roll_number || '-' %> | Adm: <%- s.admission_no %>)
+            </option>
           <% }) %>
         </select>
       </div>
       <input type="hidden" name="class_id" value="<%- class_id %>">
       <% } else if(class_id) { %>
       <div class="col-md-5">
-        <div class="alert alert-warning py-2 mb-0 small">No students found in this class.</div>
+        <div class="alert alert-warning py-2 mb-0 small"><i class="fa-solid fa-triangle-exclamation me-1"></i>No students found in this class.</div>
       </div>
       <% } %>
     </form>
@@ -55,116 +57,50 @@
 
 <% if(selectedStudent) { %>
 <div class="row g-4">
-  <!-- Collect Form -->
-  <div class="col-lg-6">
+  <!-- Left Column: The Simplified Fee Collection Form -->
+  <div class="col-lg-7">
     <div class="card shadow-sm border-0">
-      <div class="card-header bg-success text-white py-3">
-        <div class="d-flex justify-content-between align-items-center">
-          <h6 class="mb-0 fw-bold"><i class="fa-solid fa-receipt me-2"></i>Collect Student Fee</h6>
-          <span class="badge bg-light text-success fw-bold">Session 2026-27</span>
-        </div>
+      <div class="card-header bg-success text-white py-3 d-flex justify-content-between align-items-center">
+        <h6 class="mb-0 fw-bold"><i class="fa-solid fa-receipt me-2"></i>Collect Student Fee</h6>
+        <span class="badge bg-light text-success fw-bold"><%- selectedStudent.class_name %> - <%- selectedStudent.section %></span>
       </div>
       <div class="card-body p-4">
-        <!-- Student Details Brief -->
-        <div class="p-3 bg-light rounded-3 mb-4 border">
-          <div class="d-flex justify-content-between align-items-start">
-            <div>
-              <h5 class="fw-bold text-dark mb-1"><%- selectedStudent.name %></h5>
-              <div class="small text-muted mb-1">
-                <span class="me-3"><strong>Adm No:</strong> <%- selectedStudent.admission_no %></span>
-                <span><strong>Class:</strong> <%- selectedStudent.class_name %> - <%- selectedStudent.section %></span>
-              </div>
-              <div class="small text-muted">
-                <% if(selectedStudent.father_name) { %><span class="me-3"><strong>Father:</strong> <%- selectedStudent.father_name %></span><% } %>
-                <% if(selectedStudent.mother_name) { %><span><strong>Mother:</strong> <%- selectedStudent.mother_name %></span><% } %>
-              </div>
-            </div>
-            <span class="badge bg-primary px-3 py-2">Roll No: <%- selectedStudent.roll_number || 'N/A' %></span>
-          </div>
-
-          <!-- Previous Class Fee Balance Banner -->
-          <div class="mt-3 pt-2 border-top d-flex justify-content-between align-items-center flex-wrap gap-2">
-            <div>
-              <% if (selectedStudent.previous_balance && parseFloat(selectedStudent.previous_balance) > 0) { %>
-                <span class="badge bg-danger fs-6 px-3 py-2">
-                  <i class="fa-solid fa-clock-rotate-left me-1"></i>Previous Class Balance: ₹<%- parseFloat(selectedStudent.previous_balance).toLocaleString('en-IN', {minimumFractionDigits: 2}) %>
-                </span>
-                <% if (selectedStudent.previous_balance_remarks) { %>
-                  <span class="small text-muted ms-2 fst-italic">(<%- selectedStudent.previous_balance_remarks %>)</span>
-                <% } %>
-              <% } else { %>
-                <span class="badge bg-success-subtle text-success border border-success px-2 py-1">
-                  <i class="fa-solid fa-check-circle me-1"></i>No Previous Class Balance
-                </span>
+        
+        <!-- Student Info Header -->
+        <div class="p-3 bg-light rounded-3 mb-4 border d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <div>
+            <h5 class="fw-bold mb-1 text-dark"><%- selectedStudent.name %></h5>
+            <div class="small text-muted">
+              <span class="me-3"><strong>Adm No:</strong> <%- selectedStudent.admission_no %></span>
+              <span class="me-3"><strong>Father:</strong> <%- selectedStudent.father_name || selectedStudent.guardian_name || '-' %></span>
+              <% if(selectedStudent.phone || selectedStudent.guardian_phone) { %>
+                <span><strong>Phone:</strong> <%- selectedStudent.phone || selectedStudent.guardian_phone %></span>
               <% } %>
-            </div>
-            <div class="btn-group btn-group-sm">
-              <% if (selectedStudent.previous_balance && parseFloat(selectedStudent.previous_balance) > 0) { %>
-                <button type="button" class="btn btn-outline-danger btn-sm" onclick="addComponentRow('Previous Class Balance', <%- parseFloat(selectedStudent.previous_balance) %>)">
-                  <i class="fa-solid fa-plus me-1"></i>Collect Balance
-                </button>
-              <% } %>
-              <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#editBalanceModal">
-                <i class="fa-solid fa-pen-to-square me-1"></i>Adjust Balance
-              </button>
             </div>
           </div>
-
-          <!-- School Transport / Van Facility Banner -->
-          <div class="mt-2 pt-2 border-top d-flex justify-content-between align-items-center flex-wrap gap-2">
-            <div class="d-flex align-items-center gap-2 flex-wrap">
-              <% if (selectedStudent.uses_transport) { %>
-                <span class="badge bg-success fs-6 px-3 py-2">
-                  <i class="fa-solid fa-van-shuttle me-1"></i>School Van: ₹<%- parseFloat(selectedStudent.transport_fee || 0).toLocaleString('en-IN', {minimumFractionDigits: 2}) %>/mo
-                </span>
-                <% if (selectedStudent.transport_route) { %>
-                  <span class="small text-muted"><i class="fa-solid fa-route me-1"></i>Route: <strong><%- selectedStudent.transport_route %></strong></span>
-                <% } %>
-              <% } else { %>
-                <span class="badge bg-secondary-subtle text-secondary border px-2 py-1">
-                  <i class="fa-solid fa-person-walking me-1"></i>No School Van (Own Transport)
-                </span>
-                <span class="small text-muted">Van fee: ₹0.00/mo</span>
-              <% } %>
-            </div>
-            <div class="btn-group btn-group-sm">
-              <button type="button" class="btn btn-outline-success btn-sm" onclick="addTransportFeeRow()">
-                <i class="fa-solid fa-plus me-1"></i>Add Van Fee (<span id="vanMonthsMultiplierText">1 mo</span>)
-              </button>
-              <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#editTransportModal">
-                <i class="fa-solid fa-pen-to-square me-1"></i><%- selectedStudent.uses_transport ? 'Edit Van' : 'Assign Van' %>
-              </button>
-            </div>
+          <div class="text-end">
+            <span class="badge bg-primary px-3 py-2 fs-6">Roll No: <%- selectedStudent.roll_number || 'N/A' %></span>
           </div>
         </div>
 
-        <form action="/admin/fees/collect" method="POST" id="feeCollectForm">
+        <form action="/admin/fees/collect" method="POST" id="easyFeeForm">
           <input type="hidden" name="student_id" value="<%- student_id %>">
           <input type="hidden" name="class_id" value="<%- class_id %>">
           <input type="hidden" name="months_paid" id="monthsPaidInput" value="">
 
-          <!-- Month-Wise Fee Selection -->
+          <!-- ==================== SECTION 1: MONTH SELECTION ==================== -->
           <div class="mb-4">
             <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
               <label class="form-label fw-bold mb-0 text-dark">
-                <i class="fa-solid fa-calendar-days text-primary me-1"></i>Select Fee Month(s)
+                <i class="fa-solid fa-calendar-days text-primary me-1"></i>Select Fee Month(s):
               </label>
               <div class="btn-group btn-group-sm">
-                <button type="button" class="btn btn-outline-primary py-0 px-2 quick-months-btn active" data-count="1"><i class="fa-solid fa-1 me-1"></i>1 Month</button>
-                <button type="button" class="btn btn-outline-primary py-0 px-2 quick-months-btn" data-count="2"><i class="fa-solid fa-2 me-1"></i>2 Months</button>
-                <button type="button" class="btn btn-outline-primary py-0 px-2 quick-months-btn" data-count="3"><i class="fa-solid fa-3 me-1"></i>3 Months</button>
+                <button type="button" class="btn btn-outline-primary py-0 px-2 quick-m-btn active" data-count="1">1 Month</button>
+                <button type="button" class="btn btn-outline-primary py-0 px-2 quick-m-btn" data-count="2">2 Months</button>
+                <button type="button" class="btn btn-outline-primary py-0 px-2 quick-m-btn" data-count="3">3 Months</button>
                 <button type="button" class="btn btn-outline-secondary py-0 px-2" id="clearMonthsBtn">Clear</button>
                 <button type="button" class="btn btn-outline-secondary py-0 px-2" id="selectAllMonthsBtn">All 12</button>
               </div>
-            </div>
-
-            <!-- Quarter Quick Selectors -->
-            <div class="mb-2 d-flex flex-wrap gap-1 align-items-center">
-              <span class="small text-muted me-1">Quarterly:</span>
-              <button type="button" class="btn btn-xs btn-outline-info py-0 px-2 small quarter-btn" data-months="APR,MAY,JUN">Q1 (Apr-Jun)</button>
-              <button type="button" class="btn btn-xs btn-outline-info py-0 px-2 small quarter-btn" data-months="JUL,AUG,SEP">Q2 (Jul-Sep)</button>
-              <button type="button" class="btn btn-xs btn-outline-info py-0 px-2 small quarter-btn" data-months="OCT,NOV,DEC">Q3 (Oct-Dec)</button>
-              <button type="button" class="btn btn-xs btn-outline-info py-0 px-2 small quarter-btn" data-months="JAN,FEB,MAR">Q4 (Jan-Mar)</button>
             </div>
 
             <!-- Month Chips -->
@@ -190,165 +126,240 @@
               }
               if (!defaultSelectedMonth) defaultSelectedMonth = 'APR';
             %>
-            <div class="month-chips-container d-flex flex-wrap gap-2 p-2 bg-light rounded border">
+            <div class="d-flex flex-wrap gap-1 p-2 bg-light rounded border">
               <% allMonths.forEach((m) => { 
                    const isPaid = paidMonths.has(m);
                    const isDefault = (m === defaultSelectedMonth && !isPaid);
               %>
                 <div>
-                  <input type="checkbox" class="btn-check month-checkbox" id="month_<%- m %>" value="<%- m %>" autocomplete="off" <%- isDefault ? 'checked' : '' %>>
-                  <label class="btn btn-sm <%- isPaid ? 'btn-outline-success border-success' : 'btn-outline-primary' %> month-chip" for="month_<%- m %>">
+                  <input type="checkbox" class="btn-check month-checkbox" id="m_<%- m %>" value="<%- m %>" autocomplete="off" <%- isDefault ? 'checked' : '' %>>
+                  <label class="btn btn-sm <%- isPaid ? 'btn-outline-success border-success' : 'btn-outline-primary' %>" for="m_<%- m %>" style="min-width: 50px;">
                     <%- m %>
-                    <% if (isPaid) { %>
-                      <i class="fa-solid fa-circle-check text-success ms-1" title="Already Paid"></i>
-                    <% } %>
+                    <% if (isPaid) { %><i class="fa-solid fa-check small ms-1" title="Already Paid"></i><% } %>
                   </label>
                 </div>
               <% }) %>
             </div>
             <div class="mt-2 d-flex justify-content-between align-items-center">
-              <small class="text-muted">Selected: <strong id="selectedMonthsText" class="text-primary"><%- defaultSelectedMonth %></strong></small>
-              <span class="badge bg-primary" id="monthsCountBadge">1 Month</span>
+              <small class="text-muted">Selected Months: <strong id="selectedMonthsLabel" class="text-primary"><%- defaultSelectedMonth %></strong></small>
+              <span class="badge bg-primary" id="monthsBadge">1 Month</span>
             </div>
           </div>
 
-          <!-- Base Fee (Tuition Fee) -->
-          <div class="card mb-4 border bg-white shadow-none">
-            <div class="card-header bg-light py-2">
-              <div class="d-flex justify-content-between align-items-center">
-                <span class="fw-bold small text-dark"><i class="fa-solid fa-graduation-cap text-success me-1"></i>Primary Fee (Tuition)</span>
-                <span class="small text-muted">Monthly Rate: ₹<span id="monthlyRateDisplay">0</span></span>
-              </div>
+          <!-- ==================== SECTION 2: TUITION FEE ==================== -->
+          <div class="card mb-3 border shadow-none bg-white">
+            <div class="card-header bg-light py-2 d-flex justify-content-between align-items-center">
+              <span class="fw-bold small text-dark"><i class="fa-solid fa-graduation-cap text-primary me-1"></i>1. Monthly Tuition Fee</span>
+              <span class="small text-muted">Monthly Rate: ₹<span id="tuitionRateDisplay">0</span></span>
             </div>
             <div class="card-body p-3">
-              <div class="row g-2">
+              <div class="row g-2 align-items-center">
                 <div class="col-md-7">
-                  <label class="form-label small text-muted mb-1">Fee Structure / Type</label>
-                  <select name="fee_structure_id" id="feeStructureSelect" class="form-select form-select-sm">
-                    <option value="" data-amount="0">-- Custom Tuition Fee --</option>
+                  <label class="form-label small text-muted mb-1">Fee Type / Structure</label>
+                  <select name="fee_structure_id" id="tuitionStructureSelect" class="form-select form-select-sm">
                     <% feeStructures.forEach(fs => { %>
                       <option value="<%- fs.id %>" data-name="<%- fs.fee_type %>" data-amount="<%- fs.amount %>" <%- fs.fee_type.toLowerCase().includes('tuition') ? 'selected' : '' %>>
                         <%- fs.fee_type %> (₹<%- fs.amount %>/mo)
                       </option>
                     <% }) %>
+                    <option value="" data-amount="0">-- Custom Tuition Fee --</option>
                   </select>
                   <input type="hidden" name="primary_fee_name" id="primaryFeeName" value="Tuition Fee">
                 </div>
                 <div class="col-md-5">
-                  <label class="form-label small text-muted mb-1">Tuition Total (₹)</label>
+                  <label class="form-label small text-muted mb-1">Tuition Total Amount (₹)</label>
                   <div class="input-group input-group-sm">
-                    <span class="input-group-text">₹</span>
-                    <input type="number" step="0.01" name="primary_fee_amount" id="primaryFeeAmount" class="form-control fw-bold" placeholder="0.00" value="0.00">
+                    <span class="input-group-text bg-light">₹</span>
+                    <input type="number" step="0.01" name="primary_fee_amount" id="tuitionAmountInput" class="form-control fw-bold fs-6" value="0.00">
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- Other Fee Components -->
-          <div class="mb-4">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-              <label class="form-label fw-bold mb-0 text-dark">
-                <i class="fa-solid fa-layer-group text-primary me-1"></i>Other Fee Components
-              </label>
-              <button type="button" class="btn btn-sm btn-outline-primary" id="addComponentBtn">
-                <i class="fa-solid fa-plus me-1"></i>Add Row
-              </button>
+          <!-- ==================== SECTION 3: SIMPLIFIED VAN / TRANSPORT FEE ==================== -->
+          <% const studentHasVan = (selectedStudent.uses_transport == 1 || selectedStudent.uses_transport === true); %>
+          <div class="card mb-3 border border-success shadow-none bg-white">
+            <div class="card-header bg-success-subtle py-2 d-flex justify-content-between align-items-center">
+              <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" role="switch" name="van_fee_enabled" id="vanFeeSwitch" value="1" <%- studentHasVan ? 'checked' : '' %>>
+                <label class="form-check-label fw-bold text-success" for="vanFeeSwitch">
+                  <i class="fa-solid fa-van-shuttle me-1"></i>2. Collect School Van / Transport Fee
+                </label>
+              </div>
+              <span class="badge <%- studentHasVan ? 'bg-success' : 'bg-secondary' %>" id="vanStatusBadge">
+                <%- studentHasVan ? 'Van Subscribed' : 'Own Transport' %>
+              </span>
             </div>
 
-            <!-- Quick Add Pills -->
-            <div class="mb-2 d-flex flex-wrap gap-1">
-              <% if (selectedStudent && selectedStudent.uses_transport && parseFloat(selectedStudent.transport_fee || 0) > 0) { %>
-                <button type="button" class="btn btn-xs btn-success py-1 px-2 small" onclick="addTransportFeeRow()">
-                  <i class="fa-solid fa-van-shuttle me-1"></i>+ Van Fee (₹<%- parseFloat(selectedStudent.transport_fee).toFixed(2) %>/mo)
-                </button>
-              <% } else { %>
-                <button type="button" class="btn btn-xs btn-outline-success py-1 px-2 small" onclick="addTransportFeeRow()">
-                  <i class="fa-solid fa-van-shuttle me-1"></i>+ Transport / Van Fee
-                </button>
-              <% } %>
-              <% if (selectedStudent && parseFloat(selectedStudent.previous_balance || 0) > 0) { %>
-                <button type="button" class="btn btn-xs btn-danger py-1 px-2 small quick-add-pill" data-name="Previous Class Balance" data-amt="<%- parseFloat(selectedStudent.previous_balance).toFixed(2) %>">
-                  <i class="fa-solid fa-clock-rotate-left me-1"></i>+ Previous Balance (₹<%- parseFloat(selectedStudent.previous_balance).toFixed(2) %>)
-                </button>
-              <% } else { %>
-                <button type="button" class="btn btn-xs btn-outline-danger py-1 px-2 small quick-add-pill" data-name="Previous Class Balance" data-amt="0">
-                  <i class="fa-solid fa-clock-rotate-left me-1"></i>+ Previous Balance
-                </button>
-              <% } %>
-              <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2 small quick-add-pill" data-name="Admission Fee" data-amt="1000">+ Admission Fee</button>
-              <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2 small quick-add-pill" data-name="ID Card Fee" data-amt="100">+ ID Card Fee</button>
-              <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2 small quick-add-pill" data-name="Annual Fee" data-amt="500">+ Annual Fee</button>
-              <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2 small quick-add-pill" data-name="Diary Fee" data-amt="150">+ Diary Fee</button>
-              <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2 small quick-add-pill" data-name="Development Fee" data-amt="500">+ Development Fee</button>
-              <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2 small quick-add-pill" data-name="Exam Fee" data-amt="300">+ Exam Fee</button>
-            </div>
+            <div class="card-body p-3" id="vanFeeBody" style="<%- studentHasVan ? '' : 'display: none;' %>">
+              <div class="row g-2 mb-2">
+                <div class="col-md-5">
+                  <label class="form-label small text-muted mb-1">Pickup / Drop Route / Stop</label>
+                  <input type="text" name="van_route" id="vanRouteInput" class="form-control form-control-sm"
+                    value="<%- selectedStudent.transport_route || 'Karma Bazar' %>"
+                    placeholder="e.g. Karma Bazar / Vijay Nagar">
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label small text-muted mb-1">Van Fee Per Month (₹)</label>
+                  <div class="input-group input-group-sm">
+                    <span class="input-group-text">₹</span>
+                    <input type="number" step="0.01" min="0" name="van_monthly_rate" id="vanMonthlyRateInput" class="form-control form-control-sm fw-semibold"
+                      value="<%- selectedStudent.transport_fee ? parseFloat(selectedStudent.transport_fee).toFixed(2) : '500.00' %>">
+                  </div>
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label small text-muted mb-1">Van Months</label>
+                  <div class="input-group input-group-sm">
+                    <input type="number" min="1" max="12" name="van_months_count" id="vanMonthsCountInput" class="form-control form-control-sm text-center fw-bold" value="1">
+                    <span class="input-group-text small">mo</span>
+                  </div>
+                </div>
+              </div>
 
-            <!-- Dynamic Components Container -->
-            <div id="componentsContainer" class="d-flex flex-column gap-2">
-              <!-- Dynamically populated rows -->
+              <div class="d-flex justify-content-between align-items-center pt-2 border-top">
+                <div class="form-check mb-0">
+                  <input class="form-check-input" type="checkbox" name="update_van_settings" id="updateVanSettings" value="1" checked>
+                  <label class="form-check-label small text-muted" for="updateVanSettings">
+                    Save this route &amp; monthly fee to student's profile
+                  </label>
+                </div>
+                <div class="text-end">
+                  <span class="small text-muted me-2">Van Total:</span>
+                  <strong class="text-success fs-6">₹<span id="vanTotalText">0.00</span></strong>
+                  <input type="hidden" name="van_fee_total" id="vanFeeTotalInput" value="0.00">
+                </div>
+              </div>
             </div>
           </div>
 
-          <!-- Total Calculation Card -->
+          <!-- ==================== SECTION 4: PREVIOUS BALANCE ARREARS (IF ANY) ==================== -->
+          <% const hasPrevDue = (selectedStudent.previous_balance && parseFloat(selectedStudent.previous_balance) > 0); %>
+          <% if(hasPrevDue) { %>
+          <div class="card mb-3 border border-danger shadow-none bg-white">
+            <div class="card-header bg-danger-subtle py-2 d-flex justify-content-between align-items-center">
+              <div class="form-check mb-0">
+                <input class="form-check-input" type="checkbox" id="prevBalanceCheck" checked>
+                <label class="form-check-label fw-bold text-danger" for="prevBalanceCheck">
+                  <i class="fa-solid fa-clock-rotate-left me-1"></i>3. Collect Previous Class Balance
+                </label>
+              </div>
+              <span class="badge bg-danger">Pending: ₹<%- parseFloat(selectedStudent.previous_balance).toFixed(2) %></span>
+            </div>
+            <div class="card-body p-3" id="prevBalanceBody">
+              <div class="row g-2 align-items-center">
+                <div class="col-md-7">
+                  <span class="small text-muted d-block">Student has pending dues from previous class/session.</span>
+                  <% if(selectedStudent.previous_balance_remarks) { %>
+                    <small class="text-secondary fst-italic"><%- selectedStudent.previous_balance_remarks %></small>
+                  <% } %>
+                </div>
+                <div class="col-md-5">
+                  <label class="form-label small text-muted mb-1">Amount to Pay (₹)</label>
+                  <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-danger text-white">₹</span>
+                    <input type="number" step="0.01" min="0" max="<%- parseFloat(selectedStudent.previous_balance) %>" 
+                           name="prev_balance_collected" id="prevBalanceAmount" class="form-control fw-bold" 
+                           value="<%- parseFloat(selectedStudent.previous_balance).toFixed(2) %>">
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <% } %>
+
+          <!-- ==================== SECTION 5: OTHER OPTIONAL FEES ==================== -->
+          <div class="card mb-4 border shadow-none bg-white">
+            <div class="card-header bg-light py-2 d-flex justify-content-between align-items-center">
+              <span class="fw-bold small text-dark"><i class="fa-solid fa-layer-group text-primary me-1"></i>4. Other Fee Charges (Optional)</span>
+              <button type="button" class="btn btn-xs btn-outline-primary py-0 px-2" id="addCustomFeeBtn">
+                <i class="fa-solid fa-plus me-1"></i>Add Item
+              </button>
+            </div>
+            <div class="card-body p-3">
+              <!-- Quick Add Buttons -->
+              <div class="d-flex flex-wrap gap-1 mb-2">
+                <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2 small quick-item-pill" data-name="Admission Fee" data-amt="1000">+ Admission Fee</button>
+                <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2 small quick-item-pill" data-name="Exam Fee" data-amt="300">+ Exam Fee</button>
+                <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2 small quick-item-pill" data-name="ID Card Fee" data-amt="100">+ ID Card Fee</button>
+                <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2 small quick-item-pill" data-name="Diary Fee" data-amt="150">+ Diary Fee</button>
+                <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2 small quick-item-pill" data-name="Annual Charge" data-amt="500">+ Annual Charge</button>
+              </div>
+
+              <!-- Container for other components -->
+              <div id="otherComponentsList" class="d-flex flex-column gap-2"></div>
+            </div>
+          </div>
+
+          <!-- ==================== TOTAL SUMMARY & PAYMENT ==================== -->
           <div class="p-3 bg-light rounded-3 mb-4 border border-success">
             <div class="d-flex justify-content-between align-items-center mb-1">
-              <span class="text-muted small">Base Tuition Fee:</span>
-              <span class="fw-semibold" id="tuitionSummary">₹0.00</span>
+              <span class="text-muted small">Tuition Fee:</span>
+              <span class="fw-semibold" id="sumTuition">₹0.00</span>
             </div>
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <span class="text-muted small">School Van Fee:</span>
+              <span class="fw-semibold text-success" id="sumVan">₹0.00</span>
+            </div>
+            <% if(hasPrevDue) { %>
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <span class="text-muted small">Previous Balance:</span>
+              <span class="fw-semibold text-danger" id="sumPrev">₹0.00</span>
+            </div>
+            <% } %>
             <div class="d-flex justify-content-between align-items-center mb-2">
-              <span class="text-muted small">Other Components Total:</span>
-              <span class="fw-semibold" id="componentsSummary">₹0.00</span>
+              <span class="text-muted small">Other Charges:</span>
+              <span class="fw-semibold" id="sumOther">₹0.00</span>
             </div>
             <hr class="my-2">
             <div class="d-flex justify-content-between align-items-center">
               <div>
-                <span class="fw-bold fs-6 text-dark">Total Amount to Collect:</span>
-                <div class="small text-muted" id="inWordsPreview">Zero Rupees Only</div>
+                <span class="fw-bold fs-6 text-dark">Total Fee to Collect:</span>
+                <div class="small text-muted" id="inWordsLabel">Zero Rupees Only</div>
               </div>
               <div class="text-end">
-                <span class="fs-4 fw-bold text-success" id="grandTotalDisplay">₹0.00</span>
-                <input type="hidden" name="amount_paid" id="amountPaidInput" value="0.00">
+                <span class="fs-3 fw-bold text-success" id="grandTotalLabel">₹0.00</span>
+                <input type="hidden" name="amount_paid" id="grandTotalInput" value="0.00">
               </div>
             </div>
           </div>
 
-          <!-- Payment Mode & Date -->
+          <!-- Payment Details -->
           <div class="row g-3 mb-4">
             <div class="col-md-6">
-              <label class="form-label fw-semibold">Payment Mode</label>
+              <label class="form-label fw-bold small">Payment Mode</label>
               <select name="payment_mode" class="form-select">
                 <option value="Cash" selected>Cash</option>
-                <option value="Online">Online / UPI</option>
+                <option value="Online">Online / UPI / QR</option>
                 <option value="Cheque">Cheque</option>
-                <option value="DD">Demand Draft (DD)</option>
+                <option value="DD">Demand Draft</option>
               </select>
             </div>
             <div class="col-md-6">
-              <label class="form-label fw-semibold">Payment Date</label>
+              <label class="form-label fw-bold small">Payment Date</label>
               <input type="date" name="payment_date" class="form-control" value="<%- new Date().toISOString().slice(0, 10) %>">
             </div>
             <div class="col-12">
-              <label class="form-label fw-semibold">Remarks / Note (Optional)</label>
-              <input type="text" name="remarks" class="form-control" placeholder="e.g. Paid in cash at counter, slip issued">
+              <label class="form-label fw-bold small">Remarks (Optional)</label>
+              <input type="text" name="remarks" class="form-control" placeholder="e.g. Paid at counter, dual-copy receipt issued">
             </div>
           </div>
 
-          <button type="submit" class="btn btn-success btn-lg w-100 shadow-sm py-2">
-            <i class="fa-solid fa-receipt me-2"></i>Collect Fee & Generate Receipt
+          <button type="submit" class="btn btn-success btn-lg w-100 shadow py-2 fw-bold">
+            <i class="fa-solid fa-receipt me-2"></i>Collect Fee &amp; Print Receipt
           </button>
         </form>
       </div>
     </div>
   </div>
 
-  <!-- Right: Payment History -->
-  <div class="col-lg-6">
+  <!-- Right Column: Student Payment History -->
+  <div class="col-lg-5">
     <div class="card shadow-sm border-0">
       <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
-        <h6 class="mb-0 fw-bold"><i class="fa-solid fa-clock-rotate-left text-primary me-2"></i>Payment History (<%- selectedStudent.name %>)</h6>
+        <h6 class="mb-0 fw-bold"><i class="fa-solid fa-clock-rotate-left text-primary me-2"></i>Payment History</h6>
         <a href="/admin/fees/reminder/<%- student_id %>" target="_blank" class="btn btn-sm btn-outline-warning">
-          <i class="fa-solid fa-bell me-1"></i>Fee Notice (Hindi)
+          <i class="fa-solid fa-bell me-1"></i>Fee Notice
         </a>
       </div>
       <div class="card-body p-0">
@@ -357,13 +368,13 @@
             <thead class="table-light">
               <tr>
                 <th>Receipt / Date</th>
-                <th>Fee Details & Months</th>
-                <th class="text-end">Amount</th>
-                <th class="text-center">Receipt</th>
+                <th>Fee Details</th>
+                <th class="text-end pe-3">Amount</th>
+                <th class="text-center">Action</th>
               </tr>
             </thead>
             <tbody>
-              <% if(payments.length > 0) { %>
+              <% if(payments && payments.length > 0) { %>
                 <% payments.forEach(p => { %>
                 <tr>
                   <td>
@@ -373,7 +384,9 @@
                   </td>
                   <td>
                     <% if(p.months_paid) { %>
-                      <div class="mb-1"><span class="badge bg-primary-subtle text-primary border border-primary"><i class="fa-solid fa-calendar-check me-1"></i><%- p.months_paid %></span></div>
+                      <span class="badge bg-primary-subtle text-primary border border-primary d-inline-block mb-1">
+                        <i class="fa-solid fa-calendar me-1"></i><%- p.months_paid %>
+                      </span>
                     <% } %>
                     
                     <% let items = [];
@@ -390,24 +403,22 @@
                     <% } else { %>
                       <div class="small text-dark fw-semibold"><%- p.fee_type || 'Tuition Fee' %></div>
                     <% } %>
-                    
-                    <% if(p.remarks) { %><div class="small text-muted fst-italic mt-1"><%- p.remarks %></div><% } %>
                   </td>
-                  <td class="text-end">
+                  <td class="text-end pe-3">
                     <strong class="text-success fs-6">₹<%- parseFloat(p.amount_paid).toLocaleString('en-IN', { minimumFractionDigits: 2 }) %></strong>
                   </td>
                   <td class="text-center">
-                    <a href="/admin/fees/receipt/<%- p.id %>" target="_blank" class="btn btn-sm btn-outline-primary" title="Print Fee Receipt (Student Copy & College Copy)">
-                      <i class="fa-solid fa-print me-1"></i>Print
+                    <a href="/admin/fees/receipt/<%- p.id %>" target="_blank" class="btn btn-sm btn-outline-primary" title="Print Fee Receipt">
+                      <i class="fa-solid fa-print"></i>
                     </a>
                   </td>
                 </tr>
                 <% }) %>
               <% } else { %>
                 <tr>
-                  <td colspan="4" class="text-center text-muted py-4">
+                  <td colspan="4" class="text-center text-muted py-5">
                     <i class="fa-solid fa-receipt fs-2 mb-2 d-block opacity-25"></i>
-                    No previous fee records found for this student.
+                    No previous fee records for this student.
                   </td>
                 </tr>
               <% } %>
@@ -418,157 +429,54 @@
     </div>
   </div>
 </div>
-
-<!-- Modal: Adjust Previous Balance -->
-<div class="modal fade" id="editBalanceModal" tabindex="-1" aria-labelledby="editBalanceModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <form action="/admin/fees/student-balance/<%- selectedStudent.id %>" method="POST">
-        <input type="hidden" name="class_id" value="<%- class_id %>">
-        <div class="modal-header bg-light">
-          <h6 class="modal-title fw-bold" id="editBalanceModalLabel">
-            <i class="fa-solid fa-clock-rotate-left text-danger me-2"></i>Adjust Previous Class Balance
-          </h6>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body">
-          <div class="alert alert-info py-2 small mb-3">
-            <i class="fa-solid fa-info-circle me-1"></i> Enter any unpaid fee carried over from this student's previous class or session.
-          </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Student</label>
-            <input type="text" class="form-control" value="<%- selectedStudent.name %> (<%- selectedStudent.admission_no %>)" readonly>
-          </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold text-danger">Previous Balance Due (₹)</label>
-            <div class="input-group">
-              <span class="input-group-text bg-danger text-white">₹</span>
-              <input type="number" step="0.01" min="0" name="previous_balance" class="form-control fw-bold" 
-                value="<%- selectedStudent.previous_balance ? parseFloat(selectedStudent.previous_balance).toFixed(2) : '0.00' %>" required>
-            </div>
-          </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Balance Details / Remarks</label>
-            <input type="text" name="previous_balance_remarks" class="form-control" 
-              value="<%- selectedStudent.previous_balance_remarks || '' %>"
-              placeholder="e.g. Dues from Class 8 / Session 2025-26 pending fee">
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn btn-danger btn-sm"><i class="fa-solid fa-save me-1"></i>Save Balance</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
-
-<!-- Modal: Configure / Edit School Transport -->
-<div class="modal fade" id="editTransportModal" tabindex="-1" aria-labelledby="editTransportModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <form action="/admin/fees/student-transport/<%- selectedStudent.id %>" method="POST">
-        <input type="hidden" name="class_id" value="<%- class_id %>">
-        <div class="modal-header bg-light">
-          <h6 class="modal-title fw-bold" id="editTransportModalLabel">
-            <i class="fa-solid fa-van-shuttle text-success me-2"></i>School Transport / Van Facility
-          </h6>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body">
-          <div class="alert alert-success py-2 small mb-3">
-            <i class="fa-solid fa-info-circle me-1"></i> Configure van subscription, route, and monthly transport fee for this student.
-          </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Student</label>
-            <input type="text" class="form-control" value="<%- selectedStudent.name %> (<%- selectedStudent.admission_no %>)" readonly>
-          </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Avails School Van / Transport?</label>
-            <select name="uses_transport" class="form-select" id="modalUsesTransport">
-              <option value="0" <%- !selectedStudent.uses_transport ? 'selected' : '' %>>No (Own Transport / Walk)</option>
-              <option value="1" <%- selectedStudent.uses_transport ? 'selected' : '' %>>Yes (School Van)</option>
-            </select>
-          </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Pickup / Drop Route or Stop</label>
-            <input type="text" name="transport_route" class="form-control"
-              value="<%- selectedStudent.transport_route || '' %>"
-              placeholder="e.g. Karma Bazar / Vijay Nagar / Route No. 1">
-          </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold text-success">Monthly Transport Fee (₹)</label>
-            <div class="input-group">
-              <span class="input-group-text bg-success text-white">₹</span>
-              <input type="number" step="0.01" min="0" name="transport_fee" class="form-control fw-bold" 
-                value="<%- selectedStudent.transport_fee ? parseFloat(selectedStudent.transport_fee).toFixed(2) : '0.00' %>" required>
-              <span class="input-group-text small text-muted">/mo</span>
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn btn-success btn-sm"><i class="fa-solid fa-save me-1"></i>Save Transport Settings</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
 <% } %>
 
-<style>
-.month-chip {
-  min-width: 60px;
-  text-align: center;
-  font-weight: 600;
-  transition: all 0.15s ease-in-out;
-}
-.btn-check:checked + .btn-outline-primary {
-  background-color: #0d6efd !important;
-  color: #fff !important;
-  box-shadow: 0 2px 4px rgba(13, 110, 253, 0.35);
-}
-.btn-check:checked + .btn-outline-success {
-  background-color: #198754 !important;
-  color: #fff !important;
-  box-shadow: 0 2px 4px rgba(25, 135, 84, 0.35);
-}
-.quick-months-btn.active {
-  background-color: #0d6efd;
-  color: white;
-}
-.quarter-btn {
-  font-size: 0.75rem;
-}
-</style>
-
+<!-- ==================== JAVASCRIPT LOGIC ==================== -->
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+  // Elements
   const monthCheckboxes = document.querySelectorAll('.month-checkbox');
   const monthsPaidInput = document.getElementById('monthsPaidInput');
-  const selectedMonthsText = document.getElementById('selectedMonthsText');
-  const monthsCountBadge = document.getElementById('monthsCountBadge');
-  const selectAllBtn = document.getElementById('selectAllMonthsBtn');
-  const clearBtn = document.getElementById('clearMonthsBtn');
-  const quickMonthsBtns = document.querySelectorAll('.quick-months-btn');
-  const quarterBtns = document.querySelectorAll('.quarter-btn');
+  const selectedMonthsLabel = document.getElementById('selectedMonthsLabel');
+  const monthsBadge = document.getElementById('monthsBadge');
+  const quickMBtns = document.querySelectorAll('.quick-m-btn');
+  const clearMonthsBtn = document.getElementById('clearMonthsBtn');
+  const selectAllMonthsBtn = document.getElementById('selectAllMonthsBtn');
 
-  const feeStructureSelect = document.getElementById('feeStructureSelect');
+  const tuitionStructureSelect = document.getElementById('tuitionStructureSelect');
+  const tuitionRateDisplay = document.getElementById('tuitionRateDisplay');
+  const tuitionAmountInput = document.getElementById('tuitionAmountInput');
   const primaryFeeName = document.getElementById('primaryFeeName');
-  const primaryFeeAmount = document.getElementById('primaryFeeAmount');
-  const monthlyRateDisplay = document.getElementById('monthlyRateDisplay');
 
-  const componentsContainer = document.getElementById('componentsContainer');
-  const addComponentBtn = document.getElementById('addComponentBtn');
-  const quickAddPills = document.querySelectorAll('.quick-add-pill');
+  // Van Elements
+  const vanFeeSwitch = document.getElementById('vanFeeSwitch');
+  const vanFeeBody = document.getElementById('vanFeeBody');
+  const vanMonthlyRateInput = document.getElementById('vanMonthlyRateInput');
+  const vanMonthsCountInput = document.getElementById('vanMonthsCountInput');
+  const vanTotalText = document.getElementById('vanTotalText');
+  const vanFeeTotalInput = document.getElementById('vanFeeTotalInput');
+  const vanStatusBadge = document.getElementById('vanStatusBadge');
 
-  const tuitionSummary = document.getElementById('tuitionSummary');
-  const componentsSummary = document.getElementById('componentsSummary');
-  const grandTotalDisplay = document.getElementById('grandTotalDisplay');
-  const amountPaidInput = document.getElementById('amountPaidInput');
-  const inWordsPreview = document.getElementById('inWordsPreview');
+  // Previous Balance Elements
+  const prevBalanceCheck = document.getElementById('prevBalanceCheck');
+  const prevBalanceAmount = document.getElementById('prevBalanceAmount');
+  const prevBalanceBody = document.getElementById('prevBalanceBody');
 
-  // Helper to convert number to words INR
+  // Other components
+  const otherComponentsList = document.getElementById('otherComponentsList');
+  const addCustomFeeBtn = document.getElementById('addCustomFeeBtn');
+  const quickItemPills = document.querySelectorAll('.quick-item-pill');
+
+  // Summary Elements
+  const sumTuition = document.getElementById('sumTuition');
+  const sumVan = document.getElementById('sumVan');
+  const sumPrev = document.getElementById('sumPrev');
+  const sumOther = document.getElementById('sumOther');
+  const grandTotalLabel = document.getElementById('grandTotalLabel');
+  const grandTotalInput = document.getElementById('grandTotalInput');
+  const inWordsLabel = document.getElementById('inWordsLabel');
+
+  // Helper: Number to Words
   function numToWords(n) {
     if (!n || n <= 0) return 'Zero Rupees Only';
     const a = ['','One ','Two ','Three ','Four ','Five ','Six ','Seven ','Eight ','Nine ','Ten ','Eleven ','Twelve ','Thirteen ','Fourteen ','Fifteen ','Sixteen ','Seventeen ','Eighteen ','Nineteen '];
@@ -589,221 +497,222 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   function getSelectedMonths() {
-    const selected = [];
+    const list = [];
     document.querySelectorAll('.month-checkbox:checked').forEach(cb => {
-      selected.push(cb.value);
+      list.push(cb.value);
     });
-    return selected;
+    return list;
   }
 
-  function updateMonthsUI() {
+  // 1. Month Selector Handler
+  function updateMonths() {
     const months = getSelectedMonths();
-    const monthsStr = months.join(', ');
-    if (monthsPaidInput) monthsPaidInput.value = monthsStr;
-    if (selectedMonthsText) selectedMonthsText.innerText = monthsStr || 'None selected';
-    if (monthsCountBadge) {
-      monthsCountBadge.innerText = `${months.length} Month${months.length === 1 ? '' : 's'}`;
-      if (months.length === 0) {
-        monthsCountBadge.className = 'badge bg-secondary';
-      } else if (months.length === 1) {
-        monthsCountBadge.className = 'badge bg-primary';
-      } else if (months.length === 2) {
-        monthsCountBadge.className = 'badge bg-success';
-      } else {
-        monthsCountBadge.className = 'badge bg-info text-dark';
+    const str = months.join(', ');
+    if (monthsPaidInput) monthsPaidInput.value = str;
+    if (selectedMonthsLabel) selectedMonthsLabel.innerText = str || 'None selected';
+    if (monthsBadge) {
+      monthsBadge.innerText = `${months.length} Month${months.length === 1 ? '' : 's'}`;
+      monthsBadge.className = months.length > 0 ? 'badge bg-primary' : 'badge bg-secondary';
+    }
+
+    // Auto-update tuition total based on count of months
+    if (tuitionStructureSelect) {
+      const opt = tuitionStructureSelect.options[tuitionStructureSelect.selectedIndex];
+      const rate = parseFloat(opt ? opt.getAttribute('data-amount') : 0) || 0;
+      if (tuitionRateDisplay) tuitionRateDisplay.innerText = rate.toLocaleString('en-IN');
+      if (primaryFeeName) primaryFeeName.value = (opt ? opt.getAttribute('data-name') : 'Tuition Fee') || 'Tuition Fee';
+
+      if (tuitionAmountInput && rate > 0) {
+        tuitionAmountInput.value = (rate * months.length).toFixed(2);
       }
     }
 
-    const vanMultText = document.getElementById('vanMonthsMultiplierText');
-    if (vanMultText) {
-      const c = months.length > 0 ? months.length : 1;
-      vanMultText.innerText = `${c} mo${c > 1 ? 's' : ''}`;
+    // Auto-sync van months count with selected months count (if user hasn't manually set something else)
+    if (vanMonthsCountInput) {
+      const targetCount = months.length > 0 ? months.length : 1;
+      vanMonthsCountInput.value = targetCount;
     }
-
-    // Update active highlight on quick-months buttons
-    quickMonthsBtns.forEach(btn => {
-      const c = parseInt(btn.getAttribute('data-count'), 10);
-      if (months.length === c) {
-        btn.classList.add('active');
-      } else {
-        btn.classList.remove('active');
-      }
-    });
-
-    // Auto-update base tuition fee based on exact count of selected months
-    if (feeStructureSelect) {
-      const selectedOpt = feeStructureSelect.options[feeStructureSelect.selectedIndex];
-      const monthlyRate = parseFloat(selectedOpt.getAttribute('data-amount')) || 0;
-      if (monthlyRateDisplay) monthlyRateDisplay.innerText = monthlyRate.toLocaleString('en-IN');
-      if (primaryFeeName) primaryFeeName.value = selectedOpt.getAttribute('data-name') || 'Tuition Fee';
-
-      if (monthlyRate > 0) {
-        const count = months.length; // Exactly the number of selected months (e.g. 1 or 2)
-        const autoAmt = monthlyRate * count;
-        if (primaryFeeAmount) primaryFeeAmount.value = autoAmt.toFixed(2);
-      } else {
-        if (primaryFeeAmount) primaryFeeAmount.value = '0.00';
-      }
-    }
+    updateVanFee();
     recalculateTotals();
   }
 
-  // Month Checkbox change handler (Bootstrap btn-check handles styling natively)
   monthCheckboxes.forEach(cb => {
-    cb.addEventListener('change', updateMonthsUI);
+    cb.addEventListener('change', updateMonths);
   });
 
-  // Quick 1 Month / 2 Months / 3 Months buttons
-  quickMonthsBtns.forEach(btn => {
+  quickMBtns.forEach(btn => {
     btn.addEventListener('click', function () {
       const count = parseInt(this.getAttribute('data-count'), 10) || 1;
       monthCheckboxes.forEach(cb => { cb.checked = false; });
+      quickMBtns.forEach(b => b.classList.remove('active'));
+      this.classList.add('active');
 
-      // First try to check the first 'count' unpaid months
-      let checkedCount = 0;
+      let checked = 0;
       for (const cb of monthCheckboxes) {
-        const label = document.querySelector(`label[for="${cb.id}"]`);
-        const isPaid = label && label.querySelector('.fa-circle-check');
-        if (!isPaid && checkedCount < count) {
+        const lbl = document.querySelector(`label[for="${cb.id}"]`);
+        const isPaid = lbl && lbl.querySelector('.fa-check');
+        if (!isPaid && checked < count) {
           cb.checked = true;
-          checkedCount++;
+          checked++;
         }
       }
-
-      // If not enough unpaid found, check from beginning
-      if (checkedCount < count) {
+      if (checked < count) {
         for (const cb of monthCheckboxes) {
-          if (!cb.checked && checkedCount < count) {
+          if (!cb.checked && checked < count) {
             cb.checked = true;
-            checkedCount++;
+            checked++;
           }
         }
       }
-
-      updateMonthsUI();
+      updateMonths();
     });
   });
 
-  if (selectAllBtn) {
-    selectAllBtn.addEventListener('click', function () {
-      monthCheckboxes.forEach(cb => { cb.checked = true; });
-      updateMonthsUI();
-    });
-  }
-
-  if (clearBtn) {
-    clearBtn.addEventListener('click', function () {
+  if (clearMonthsBtn) {
+    clearMonthsBtn.addEventListener('click', function () {
       monthCheckboxes.forEach(cb => { cb.checked = false; });
-      updateMonthsUI();
+      quickMBtns.forEach(b => b.classList.remove('active'));
+      updateMonths();
     });
   }
 
-  quarterBtns.forEach(btn => {
-    btn.addEventListener('click', function () {
-      const qMonths = this.getAttribute('data-months').split(',');
-      monthCheckboxes.forEach(cb => {
-        cb.checked = qMonths.includes(cb.value);
-      });
-      updateMonthsUI();
+  if (selectAllMonthsBtn) {
+    selectAllMonthsBtn.addEventListener('click', function () {
+      monthCheckboxes.forEach(cb => { cb.checked = true; });
+      updateMonths();
     });
-  });
-
-  if (feeStructureSelect) {
-    feeStructureSelect.addEventListener('change', updateMonthsUI);
   }
 
-  if (primaryFeeAmount) {
-    primaryFeeAmount.addEventListener('input', recalculateTotals);
+  if (tuitionStructureSelect) {
+    tuitionStructureSelect.addEventListener('change', updateMonths);
+  }
+  if (tuitionAmountInput) {
+    tuitionAmountInput.addEventListener('input', recalculateTotals);
   }
 
-  // Dynamic Component Rows
-  function addComponentRow(name = '', amount = 0) {
-    const rowId = 'comp_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+  // 2. Van / Transport Fee Handler
+  function updateVanFee() {
+    if (!vanFeeSwitch) return;
+    const isEnabled = vanFeeSwitch.checked;
+    if (vanFeeBody) vanFeeBody.style.display = isEnabled ? 'block' : 'none';
+    if (vanStatusBadge) {
+      vanStatusBadge.className = isEnabled ? 'badge bg-success' : 'badge bg-secondary';
+      vanStatusBadge.innerText = isEnabled ? 'Van Active' : 'No Van';
+    }
+
+    let vanTotal = 0;
+    if (isEnabled) {
+      const rate = parseFloat(vanMonthlyRateInput ? vanMonthlyRateInput.value : 0) || 0;
+      const count = parseInt(vanMonthsCountInput ? vanMonthsCountInput.value : 1, 10) || 1;
+      vanTotal = rate * count;
+    }
+
+    if (vanTotalText) vanTotalText.innerText = vanTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 });
+    if (vanFeeTotalInput) vanFeeTotalInput.value = vanTotal.toFixed(2);
+    recalculateTotals();
+  }
+
+  if (vanFeeSwitch) {
+    vanFeeSwitch.addEventListener('change', updateVanFee);
+  }
+  if (vanMonthlyRateInput) {
+    vanMonthlyRateInput.addEventListener('input', updateVanFee);
+  }
+  if (vanMonthsCountInput) {
+    vanMonthsCountInput.addEventListener('input', updateVanFee);
+  }
+
+  // 3. Previous Balance Handler
+  if (prevBalanceCheck) {
+    prevBalanceCheck.addEventListener('change', function () {
+      if (prevBalanceBody) prevBalanceBody.style.display = this.checked ? 'block' : 'none';
+      if (!this.checked && prevBalanceAmount) {
+        prevBalanceAmount.setAttribute('data-prev-val', prevBalanceAmount.value);
+        prevBalanceAmount.value = '0.00';
+      } else if (this.checked && prevBalanceAmount) {
+        const prev = prevBalanceAmount.getAttribute('data-prev-val');
+        if (prev) prevBalanceAmount.value = prev;
+      }
+      recalculateTotals();
+    });
+  }
+  if (prevBalanceAmount) {
+    prevBalanceAmount.addEventListener('input', recalculateTotals);
+  }
+
+  // 4. Other Components
+  function addOtherFeeRow(name = '', amount = 0) {
     const div = document.createElement('div');
-    div.className = 'row g-2 align-items-center component-row';
-    div.id = rowId;
+    div.className = 'row g-2 align-items-center other-row';
     div.innerHTML = `
       <div class="col-7">
-        <div class="input-group input-group-sm">
-          <span class="input-group-text bg-white"><i class="fa-solid fa-tag text-muted"></i></span>
-          <input type="text" name="component_name[]" class="form-control" value="${name}" placeholder="Component Name (e.g. ID Card)" required>
-        </div>
+        <input type="text" name="component_name[]" class="form-control form-control-sm" value="${name}" placeholder="Component Name" required>
       </div>
       <div class="col-4">
         <div class="input-group input-group-sm">
           <span class="input-group-text">₹</span>
-          <input type="number" step="0.01" name="component_amount[]" class="form-control comp-amount fw-semibold" value="${amount > 0 ? amount.toFixed(2) : ''}" placeholder="0.00" required>
+          <input type="number" step="0.01" name="component_amount[]" class="form-control form-control-sm other-amt fw-semibold" value="${amount > 0 ? amount.toFixed(2) : ''}" placeholder="0.00" required>
         </div>
       </div>
       <div class="col-1 text-end">
-        <button type="button" class="btn btn-sm btn-outline-danger p-1 remove-comp-btn" title="Remove"><i class="fa-solid fa-xmark"></i></button>
+        <button type="button" class="btn btn-sm btn-outline-danger p-1 remove-other-btn"><i class="fa-solid fa-xmark"></i></button>
       </div>
     `;
 
-    componentsContainer.appendChild(div);
+    otherComponentsList.appendChild(div);
 
-    div.querySelector('.remove-comp-btn').addEventListener('click', function () {
+    div.querySelector('.remove-other-btn').addEventListener('click', function () {
       div.remove();
       recalculateTotals();
     });
 
-    div.querySelector('.comp-amount').addEventListener('input', recalculateTotals);
+    div.querySelector('.other-amt').addEventListener('input', recalculateTotals);
     
-    // Focus amount if name is provided, else focus name
-    const amtInput = div.querySelector('.comp-amount');
-    const nameInput = div.querySelector('input[name="component_name[]"]');
-    if (name) {
-      amtInput.focus();
-      amtInput.select();
-    } else {
-      nameInput.focus();
-    }
-
+    const amtInp = div.querySelector('.other-amt');
+    if (name) amtInp.focus();
     recalculateTotals();
   }
-  window.addComponentRow = addComponentRow;
 
-  function addTransportFeeRow() {
-    const months = getSelectedMonths();
-    const count = months.length > 0 ? months.length : 1;
-    const rate = <%= (selectedStudent && selectedStudent.transport_fee) ? parseFloat(selectedStudent.transport_fee) : 0 %>;
-    const total = rate * count;
-    const name = (months.length > 0 && total > 0) ? `Transport / Van Fee (${months.join(', ')})` : 'Transport / Van Fee';
-    addComponentRow(name, total);
-  }
-  window.addTransportFeeRow = addTransportFeeRow;
-
-  if (addComponentBtn) {
-    addComponentBtn.addEventListener('click', function () {
-      addComponentRow('', 0);
-    });
+  if (addCustomFeeBtn) {
+    addCustomFeeBtn.addEventListener('click', () => addOtherFeeRow('', 0));
   }
 
-  quickAddPills.forEach(pill => {
+  quickItemPills.forEach(pill => {
     pill.addEventListener('click', function () {
       const name = this.getAttribute('data-name');
       const amt = parseFloat(this.getAttribute('data-amt')) || 0;
-      addComponentRow(name, amt);
+      addOtherFeeRow(name, amt);
     });
   });
 
+  // 5. Grand Total Calculation
   function recalculateTotals() {
-    const pAmt = parseFloat(primaryFeeAmount ? primaryFeeAmount.value : 0) || 0;
-    let compTotal = 0;
-    document.querySelectorAll('.comp-amount').forEach(inp => {
-      compTotal += parseFloat(inp.value) || 0;
+    const tAmt = parseFloat(tuitionAmountInput ? tuitionAmountInput.value : 0) || 0;
+    const vAmt = parseFloat(vanFeeTotalInput ? vanFeeTotalInput.value : 0) || 0;
+    
+    let pAmt = 0;
+    if (prevBalanceCheck && prevBalanceCheck.checked && prevBalanceAmount) {
+      pAmt = parseFloat(prevBalanceAmount.value) || 0;
+    }
+
+    let oAmt = 0;
+    document.querySelectorAll('.other-amt').forEach(inp => {
+      oAmt += parseFloat(inp.value) || 0;
     });
 
-    const grandTotal = pAmt + compTotal;
+    const total = tAmt + vAmt + pAmt + oAmt;
 
-    if (tuitionSummary) tuitionSummary.innerText = `₹${pAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
-    if (componentsSummary) componentsSummary.innerText = `₹${compTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
-    if (grandTotalDisplay) grandTotalDisplay.innerText = `₹${grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
-    if (amountPaidInput) amountPaidInput.value = grandTotal.toFixed(2);
-    if (inWordsPreview) inWordsPreview.innerText = numToWords(grandTotal);
+    if (sumTuition) sumTuition.innerText = `₹${tAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+    if (sumVan) sumVan.innerText = `₹${vAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+    if (sumPrev) sumPrev.innerText = `₹${pAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+    if (sumOther) sumOther.innerText = `₹${oAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+
+    if (grandTotalLabel) grandTotalLabel.innerText = `₹${total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+    if (grandTotalInput) grandTotalInput.value = total.toFixed(2);
+    if (inWordsLabel) inWordsLabel.innerText = numToWords(total);
   }
 
-  // Initial calculations
-  updateMonthsUI();
+  // Initial Calculation
+  updateMonths();
 });
 </script>

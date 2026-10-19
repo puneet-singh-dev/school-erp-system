@@ -12,6 +12,7 @@ const { generateFeeReceiptPDF } = require('../utils/receiptPdf');
 const { generateClassMarksPDF } = require('../utils/marksheetPdf');
 const { generateClassFeeRemindersHindiPDF } = require('../utils/feeReminderHindiPdf');
 const { generateClassStudentListPDF } = require('../utils/classListPdf');
+const { generateStudentListPDF } = require('../utils/studentListPdf');
 
 // Configure Multer for student profile photo uploads
 const uploadDir = path.join(__dirname, '../public/uploads/students');
@@ -225,6 +226,57 @@ router.get('/students', async (req, res) => {
     res.render('admin/students', { title: 'Students', students, classes, search, classFilter });
   } catch (err) {
     console.error(err); req.flash('error_msg', 'Error loading students'); res.redirect('/admin');
+  }
+});
+
+// ==================== EXPORT CUSTOM STUDENT LIST PDF ====================
+router.get('/students/export-pdf', async (req, res) => {
+  try {
+    const classId = parseInt(req.query.class_id) || null;
+    const rawFields = req.query.fields;
+    const fields = Array.isArray(rawFields)
+      ? rawFields
+      : (typeof rawFields === 'string' ? rawFields.split(',').map(f => f.trim()) : []);
+    const sortBy = req.query.sort_by || 'roll_number';
+
+    let classInfo = null;
+    if (classId) {
+      const [cRows] = await db.query(`
+        SELECT c.*, u.name as class_teacher_name
+        FROM classes c
+        LEFT JOIN users u ON c.teacher_id = u.id
+        WHERE c.id = ?
+      `, [classId]);
+      if (cRows.length) classInfo = cRows[0];
+    }
+
+    let query = `
+      SELECT s.*, u.name, u.email, u.phone, u.address,
+             c.name as class_name, c.section, c.academic_year
+      FROM students s
+      JOIN users u ON s.user_id = u.id
+      LEFT JOIN classes c ON s.class_id = c.id
+      WHERE 1=1
+    `;
+    const params = [];
+    if (classId) {
+      query += ` AND s.class_id = ?`;
+      params.push(classId);
+    }
+
+    if (sortBy === 'name') {
+      query += ` ORDER BY u.name ASC`;
+    } else if (sortBy === 'admission_no') {
+      query += ` ORDER BY s.admission_no ASC`;
+    } else {
+      query += ` ORDER BY (s.roll_number IS NULL OR s.roll_number = 0), s.roll_number ASC, u.name ASC`;
+    }
+
+    const [students] = await db.query(query, params);
+    generateStudentListPDF(res, students, classInfo, fields);
+  } catch (err) {
+    console.error('Error generating student list PDF:', err);
+    res.status(500).send('Error generating student list PDF: ' + err.message);
   }
 });
 
@@ -731,14 +783,52 @@ router.post('/fees/collect', async (req, res) => {
   try {
     const receiptNo = 'RCP' + Date.now();
     
-    // Build breakdown array
-    const breakdown = [];
+    // 1. Base / Tuition Fee
     const pAmt = parseFloat(primary_fee_amount) || 0;
     if (pAmt > 0) {
       const pName = (primary_fee_name && primary_fee_name.trim()) ? primary_fee_name.trim() : 'Tuition Fee';
       breakdown.push({
         name: months_paid ? `${pName} (${months_paid})` : pName,
         amount: pAmt
+      });
+    }
+
+    // 2. Dedicated Van / Transport Fee (Easy & Direct)
+    const vanFeeEnabled = req.body.van_fee_enabled === '1' || req.body.van_fee_enabled === 'on';
+    const vanFeeTotal = parseFloat(req.body.van_fee_total) || 0;
+    const vanRoute = (req.body.van_route || '').trim();
+    const vanMonthlyRate = parseFloat(req.body.van_monthly_rate) || 0;
+    const vanMonths = (req.body.van_months || months_paid || '').trim();
+
+    if (vanFeeEnabled && vanFeeTotal > 0) {
+      let vanLabel = 'School Van / Transport Fee';
+      if (vanMonths) vanLabel += ` (${vanMonths})`;
+      if (vanRoute) vanLabel += ` [${vanRoute}]`;
+
+      breakdown.push({
+        name: vanLabel,
+        amount: vanFeeTotal
+      });
+
+      // Update student profile with route and monthly fee if requested
+      if (req.body.update_van_settings === '1' || req.body.update_van_settings === 'on' || vanMonthlyRate > 0) {
+        try {
+          await db.query(
+            `UPDATE students SET uses_transport = 1, transport_route = ?, transport_fee = ? WHERE id = ?`,
+            [vanRoute || null, vanMonthlyRate > 0 ? vanMonthlyRate : vanFeeTotal, student_id]
+          );
+        } catch (vErr) {
+          console.error('Auto-update student van setting error:', vErr.message);
+        }
+      }
+    }
+
+    // 3. Direct Previous Class Balance Collection
+    const prevBalanceCollected = parseFloat(req.body.prev_balance_collected) || 0;
+    if (prevBalanceCollected > 0) {
+      breakdown.push({
+        name: 'Previous Class Balance',
+        amount: prevBalanceCollected
       });
     }
 
