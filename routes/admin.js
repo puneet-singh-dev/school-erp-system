@@ -782,6 +782,7 @@ router.post('/fees/collect', async (req, res) => {
 
   try {
     const receiptNo = 'RCP' + Date.now();
+    const breakdown = [];
     
     // 1. Base / Tuition Fee
     const pAmt = parseFloat(primary_fee_amount) || 0;
