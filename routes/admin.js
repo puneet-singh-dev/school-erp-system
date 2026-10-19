@@ -13,7 +13,7 @@ const { generateClassMarksPDF } = require('../utils/marksheetPdf');
 const { generateClassFeeRemindersHindiPDF } = require('../utils/feeReminderHindiPdf');
 const { generateClassStudentListPDF } = require('../utils/classListPdf');
 const { generateStudentListPDF } = require('../utils/studentListPdf');
-const { getNextSequentialAdmissionNo, generateDemoData, clearDemoData } = require('../utils/demoData');
+const { ensureDemoColumn, getNextSequentialAdmissionNo, generateDemoData, clearDemoData } = require('../utils/demoData');
 
 // Configure Multer for student profile photo uploads
 const uploadDir = path.join(__dirname, '../public/uploads/students');
@@ -178,6 +178,7 @@ router.get('/', async (req, res) => {
     // 10. Demo records count
     let demoCount = 0;
     try {
+      await ensureDemoColumn();
       const [[dRow]] = await db.query('SELECT COUNT(*) as demoCount FROM users WHERE is_demo = 1');
       demoCount = dRow ? dRow.demoCount : 0;
     } catch (e) { console.error('Dashboard demo count error:', e.message); }

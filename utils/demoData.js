@@ -35,9 +35,35 @@ async function getNextSequentialAdmissionNo() {
 }
 
 /**
+ * Ensures the is_demo column exists on the users table across all MySQL environments
+ */
+async function ensureDemoColumn() {
+  try {
+    const [exists] = await db.query(
+      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'is_demo'`
+    );
+    if (!exists || exists.length === 0) {
+      await db.query(`ALTER TABLE users ADD COLUMN is_demo BOOLEAN DEFAULT FALSE`);
+    }
+  } catch (err) {
+    try {
+      await db.query(`ALTER TABLE users ADD COLUMN is_demo BOOLEAN DEFAULT FALSE`);
+    } catch (ignore) {}
+  }
+}
+
+/**
  * Generates 10-15 demo students per class and 4 demo teachers
  */
 async function generateDemoData(adminUserId = 1) {
+  // Ensure the is_demo column exists in users table across all MySQL environments
+  await ensureDemoColumn();
+
+  // Reconcile any existing demo users by email pattern
+  try {
+    await db.query(`UPDATE users SET is_demo = 1 WHERE email LIKE '%.demo@school.erp' OR email LIKE 'adm%@school.erp'`);
+  } catch (recErr) {}
+
   // Check if demo data already exists
   const [[{ existingDemo }]] = await db.query('SELECT COUNT(*) as existingDemo FROM users WHERE is_demo = 1');
   if (existingDemo > 0) {
@@ -82,6 +108,11 @@ async function generateDemoData(adminUserId = 1) {
   let teachCount = 10;
   for (const t of demoTeachers) {
     const email = `teacher.${t.name.split(' ')[1].toLowerCase()}.demo@school.erp`;
+    const [[existing]] = await db.query('SELECT id FROM users WHERE email = ?', [email]);
+    if (existing) {
+      await db.query('UPDATE users SET is_demo = 1 WHERE id = ?', [existing.id]);
+      continue;
+    }
     const [uRes] = await db.query(
       `INSERT INTO users (name, email, password, role, phone, is_demo) VALUES (?, ?, ?, 'teacher', ?, 1)`,
       [t.name, email, teacherPasswordHash, t.phone]
@@ -210,15 +241,19 @@ async function generateDemoData(adminUserId = 1) {
  * Deletes all demo students, demo teachers, and all related demo data
  */
 async function clearDemoData() {
-  const [[{ count }]] = await db.query('SELECT COUNT(*) as count FROM users WHERE is_demo = 1');
+  await ensureDemoColumn();
+  const [[{ count }]] = await db.query(
+    "SELECT COUNT(*) as count FROM users WHERE is_demo = 1 OR email LIKE '%.demo@school.erp'"
+  );
   if (count > 0) {
     // ON DELETE CASCADE on students and teachers automatically cleans all related records
-    await db.query('DELETE FROM users WHERE is_demo = 1');
+    await db.query("DELETE FROM users WHERE is_demo = 1 OR email LIKE '%.demo@school.erp'");
   }
   return count;
 }
 
 module.exports = {
+  ensureDemoColumn,
   getNextSequentialAdmissionNo,
   generateDemoData,
   clearDemoData

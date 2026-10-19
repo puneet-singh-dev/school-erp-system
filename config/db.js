@@ -74,6 +74,7 @@ async function ensureSchema() {
         address TEXT,
         profile_photo VARCHAR(255) DEFAULT 'default.png',
         is_active BOOLEAN DEFAULT TRUE,
+        is_demo BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
@@ -297,6 +298,27 @@ async function ensureSchema() {
       );
       if (exists.length === 0) {
         await pool.query(`ALTER TABLE fee_payments ADD COLUMN ${col.name} ${col.def}`);
+      }
+    }
+
+    // Users extra columns (e.g. is_demo)
+    const userColumns = [
+      { name: 'is_demo', def: 'BOOLEAN DEFAULT FALSE' }
+    ];
+
+    for (const col of userColumns) {
+      try {
+        const [exists] = await pool.query(
+          `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = ?`,
+          [col.name]
+        );
+        if (exists.length === 0) {
+          await pool.query(`ALTER TABLE users ADD COLUMN ${col.name} ${col.def}`);
+        }
+      } catch (uErr) {
+        try {
+          await pool.query(`ALTER TABLE users ADD COLUMN ${col.name} ${col.def}`);
+        } catch (ignore) {}
       }
     }
 
