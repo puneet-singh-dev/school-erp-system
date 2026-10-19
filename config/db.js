@@ -437,6 +437,20 @@ async function ensureSchema() {
       console.log('✅ Default classes initialized (Class 1 to 10).');
     }
 
+    // 7. Auto-seed demo data once on initial deployment
+    try {
+      await pool.query(`CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR(50) PRIMARY KEY, setting_val VARCHAR(255))`);
+      const [[initSetting]] = await pool.query(`SELECT setting_val FROM system_settings WHERE setting_key = 'demo_initialized'`);
+      if (!initSetting) {
+        const { generateDemoData } = require('../utils/demoData');
+        await generateDemoData(1);
+        await pool.query(`INSERT INTO system_settings (setting_key, setting_val) VALUES ('demo_initialized', 'true') ON DUPLICATE KEY UPDATE setting_val = 'true'`);
+        console.log('✅ Initial demo data auto-populated for testing.');
+      }
+    } catch (dErr) {
+      console.log('Demo initial seed notice:', dErr.message);
+    }
+
     console.log('✅ All database schema checks and seeding completed.');
   } catch (err) {
     console.error('ensureSchema error:', err.message);
