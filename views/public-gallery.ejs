@@ -1,0 +1,108 @@
+<div class="container py-4" style="max-width: 1200px; position: relative; z-index: 2;">
+  <!-- Header Bar -->
+  <div class="card shadow-sm border-0 mb-4" style="border-radius: 18px; background: rgba(255, 255, 255, 0.98);">
+    <div class="card-body p-3 p-md-4 d-flex justify-content-between align-items-center flex-wrap gap-3">
+      <div class="d-flex align-items-center gap-3">
+        <img src="/img/logo.png" alt="<%- schoolName %>" style="width: 55px; height: 55px; object-fit: contain;" class="rounded-circle border p-1 shadow-sm">
+        <div>
+          <h5 class="fw-bold text-dark mb-0"><%- schoolName %></h5>
+          <p class="text-muted small mb-0"><i class="fa-solid fa-camera-retro text-primary me-1"></i>Campus &amp; Events Photo Gallery</p>
+        </div>
+      </div>
+      <div>
+        <a href="/login" class="btn btn-primary fw-semibold px-4 py-2" style="border-radius: 10px;">
+          <i class="fa-solid fa-right-to-bracket me-2"></i>Go to Portal Login
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Category Filter Pills -->
+  <div class="mb-4 d-flex flex-wrap gap-2">
+    <a href="/gallery" class="btn btn-sm <%- !selectedCategory ? 'btn-light text-primary fw-bold shadow-sm' : 'btn-outline-light text-white' %>" style="border-radius: 20px;">
+      <i class="fa-solid fa-layer-group me-1"></i>All Photos (<%- images.length %>)
+    </a>
+    <% if(categories && categories.length > 0) { %>
+      <% categories.forEach(cat => { %>
+        <a href="/gallery?category=<%- encodeURIComponent(cat) %>" class="btn btn-sm <%- selectedCategory === cat ? 'btn-light text-primary fw-bold shadow-sm' : 'btn-outline-light text-white' %>" style="border-radius: 20px;">
+          <%- cat %>
+        </a>
+      <% }) %>
+    <% } %>
+  </div>
+
+  <!-- Gallery Grid -->
+  <div class="row g-4">
+    <% if(images && images.length > 0) { %>
+      <% images.forEach(img => { %>
+        <div class="col-sm-6 col-md-4 col-lg-3">
+          <div class="card h-100 shadow border-0 overflow-hidden" style="border-radius: 16px; background: #ffffff;">
+            <div class="position-relative" style="height: 200px; overflow: hidden; background: #f1f5f9;">
+              <img src="/uploads/gallery/<%- img.image_path %>" 
+                   alt="<%- img.title %>" 
+                   class="w-100 h-100" 
+                   style="object-fit: cover; transition: transform 0.3s ease; cursor: pointer;"
+                   onclick="openPreview('/uploads/gallery/<%- img.image_path %>', '<%- (img.title || '').replace(/'/g, '\\\'') %>')"
+                   onerror="this.onerror=null; this.src='/img/logo.png';">
+              <span class="badge bg-dark bg-opacity-75 position-absolute top-0 end-0 m-2 px-2 py-1" style="font-size:0.75rem;">
+                <%- img.category || 'General' %>
+              </span>
+            </div>
+            <div class="card-body p-3 d-flex flex-column">
+              <h6 class="fw-bold text-dark mb-1 text-truncate" title="<%- img.title %>"><%- img.title %></h6>
+              <% if(img.description) { %>
+                <p class="text-muted small mb-2 text-truncate" title="<%- img.description %>"><%- img.description %></p>
+              <% } %>
+              <div class="mt-auto d-flex justify-content-between align-items-center pt-2 border-top">
+                <small class="text-muted" style="font-size:0.75rem;"><%- new Date(img.created_at).toLocaleDateString('en-IN') %></small>
+                <div class="btn-group btn-group-sm">
+                  <button type="button" class="btn btn-outline-secondary" onclick="openPreview('/uploads/gallery/<%- img.image_path %>', '<%- (img.title || '').replace(/'/g, '\\\'') %>')" title="View Image">
+                    <i class="fa-solid fa-magnifying-glass-plus"></i>
+                  </button>
+                  <a href="/uploads/gallery/<%- img.image_path %>" target="_blank" download="<%- (img.title || 'photo').replace(/[^a-zA-Z0-9]/g, '_') %>.jpg" class="btn btn-outline-primary" title="Download">
+                    <i class="fa-solid fa-download"></i>
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      <% }) %>
+    <% } else { %>
+      <div class="col-12 text-center py-5">
+        <div class="card shadow-sm border-0 py-5" style="border-radius: 18px; background: rgba(255,255,255,0.95);">
+          <div class="card-body">
+            <i class="fa-solid fa-images text-muted fs-1 mb-3 opacity-50"></i>
+            <h5 class="fw-bold text-dark">No gallery photos found</h5>
+            <p class="text-muted small mb-3">No photos are available in this category yet.</p>
+            <a href="/login" class="btn btn-outline-primary btn-sm px-3">Return to Portal</a>
+          </div>
+        </div>
+      </div>
+    <% } %>
+  </div>
+</div>
+
+<!-- Lightbox Modal -->
+<div class="modal fade" id="imagePreviewModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content border-0" style="background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(10px);">
+      <div class="modal-header border-0 pb-0">
+        <h6 class="modal-title text-white fw-bold" id="previewTitle">Photo Preview</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body text-center p-3">
+        <img id="previewImg" src="" alt="Preview" class="img-fluid rounded shadow" style="max-height: 75vh; object-fit: contain;">
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function openPreview(src, title) {
+  document.getElementById('previewImg').src = src;
+  document.getElementById('previewTitle').innerText = title || 'Photo Preview';
+  const modal = new bootstrap.Modal(document.getElementById('imagePreviewModal'));
+  modal.show();
+}
+</script>

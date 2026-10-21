@@ -12,7 +12,7 @@
         <div class="col-md-4"><label class="form-label">Email *</label><input type="email" name="email" class="form-control" value="<%- teacher ? teacher.email : '' %>" required></div>
         <div class="col-md-4"><label class="form-label">Phone</label><input type="text" name="phone" class="form-control" value="<%- teacher ? teacher.phone : '' %>"></div>
         <% if(!teacher) { %>
-        <div class="col-md-4"><label class="form-label">Password <small>(default: teacher123)</small></label><input type="password" name="password" class="form-control"></div>
+        <div class="col-md-4"><label class="form-label">Password <small class="text-muted">(default: Mobile No)</small></label><input type="password" name="password" class="form-control" placeholder="Leave blank to use Mobile No"></div>
         <% } %>
         <div class="col-md-8"><label class="form-label">Address</label><input type="text" name="address" class="form-control" value="<%- teacher ? teacher.address : '' %>"></div>
       </div>

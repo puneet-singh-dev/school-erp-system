@@ -16,6 +16,7 @@ app.set('layout', 'layouts/main');
 
 // Static files
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 
 // Body parser
 app.use(express.urlencoded({ extended: true }));
@@ -67,6 +68,5 @@ app.use((req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`\n🏫 School ERP running at http://localhost:${PORT}`);
-  console.log(`📧 Admin login: admin@school.com | Password: admin123\n`);
+  console.log(`\n🏫 School ERP running at http://localhost:${PORT}\n`);
 });

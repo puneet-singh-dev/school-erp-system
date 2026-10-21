@@ -11,10 +11,236 @@
 body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f4f8; margin: 0; }
 
 /* ==================== AUTH ==================== */
-.auth-body { background: linear-gradient(135deg, #1a56db 0%, #0c3776 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
-.auth-container { width: 100%; max-width: 480px; padding: 20px; }
-.auth-card { background: white; border-radius: 16px; padding: 40px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
-.auth-logo { text-align: center; margin-bottom: 30px; }
+.auth-body {
+  background: radial-gradient(circle at 10% 20%, rgba(37, 99, 235, 0.22) 0%, transparent 40%),
+              radial-gradient(circle at 90% 80%, rgba(16, 185, 129, 0.18) 0%, transparent 40%),
+              radial-gradient(circle at 50% 50%, rgba(99, 102, 241, 0.12) 0%, transparent 60%),
+              linear-gradient(135deg, #090e1a 0%, #172554 45%, #0f172a 100%);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 30px 16px;
+  position: relative;
+}
+
+.auth-container {
+  width: 100%;
+  max-width: 500px;
+  position: relative;
+  z-index: 2;
+}
+
+.auth-card {
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 34px 28px;
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.15);
+  position: relative;
+}
+
+@media (max-width: 576px) {
+  .auth-card { padding: 26px 18px; border-radius: 16px; }
+}
+
+.auth-logo { text-align: center; margin-bottom: 22px; }
+
+.auth-logo-img {
+  width: 76px;
+  height: 76px;
+  object-fit: contain;
+  border-radius: 50%;
+  background: #ffffff;
+  padding: 6px;
+  box-shadow: 0 8px 25px rgba(37, 99, 235, 0.2);
+  border: 2px solid #e0e7ff;
+}
+
+/* Role Switcher Tabs */
+.role-tabs {
+  background: #f1f5f9;
+  border-radius: 14px;
+  padding: 5px;
+  display: flex;
+  gap: 4px;
+  margin-bottom: 22px;
+  border: 1px solid #e2e8f0;
+}
+
+.role-tab-btn {
+  flex: 1;
+  text-align: center;
+  padding: 9px 6px;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #475569;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.role-tab-btn:hover {
+  color: #0f172a;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.role-tab-btn.active.role-student {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+}
+
+.role-tab-btn.active.role-teacher {
+  background: linear-gradient(135deg, #059669, #047857);
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px rgba(5, 150, 105, 0.35);
+}
+
+.role-tab-btn.active.role-admin {
+  background: linear-gradient(135deg, #1e293b, #0f172a);
+  color: #f8fafc !important;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.4);
+}
+
+/* Auth Portal Badges */
+.auth-portal-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 30px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.auth-portal-badge.badge-student {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+
+.auth-portal-badge.badge-teacher {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+}
+
+.auth-portal-badge.badge-admin {
+  background: #f8fafc;
+  color: #0f172a;
+  border: 1px solid #cbd5e1;
+}
+
+/* Input enhancements */
+.auth-input-group .input-group-text {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #64748b;
+  padding: 10px 14px;
+}
+
+.auth-input-group .form-control {
+  border-color: #cbd5e1;
+  font-size: 0.92rem;
+  padding: 10px 14px;
+  background: #ffffff;
+}
+
+.auth-input-group .form-control:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.auth-info-box {
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 0.81rem;
+  line-height: 1.45;
+  margin-bottom: 20px;
+}
+
+.auth-info-box.info-student {
+  background: #f0f7ff;
+  border: 1px solid #dbeafe;
+  color: #1e40af;
+}
+
+.auth-info-box.info-teacher {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+}
+
+.auth-info-box.info-admin {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #334155;
+}
+
+/* Submit Buttons */
+.btn-auth-student {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  border: none;
+  color: white;
+  font-weight: 600;
+  padding: 12px;
+  border-radius: 12px;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.3);
+  transition: all 0.2s ease;
+}
+
+.btn-auth-student:hover {
+  background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(37, 99, 235, 0.4);
+}
+
+.btn-auth-teacher {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  border: none;
+  color: white;
+  font-weight: 600;
+  padding: 12px;
+  border-radius: 12px;
+  box-shadow: 0 4px 14px rgba(5, 150, 105, 0.3);
+  transition: all 0.2s ease;
+}
+
+.btn-auth-teacher:hover {
+  background: linear-gradient(135deg, #047857 0%, #065f46 100%);
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(5, 150, 105, 0.4);
+}
+
+.btn-auth-admin {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  border: none;
+  color: white;
+  font-weight: 600;
+  padding: 12px;
+  border-radius: 12px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.35);
+  transition: all 0.2s ease;
+}
+
+.btn-auth-admin:hover {
+  background: linear-gradient(135deg, #0f172a 0%, #020617 100%);
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.45);
+}
 
 /* ==================== LAYOUT ==================== */
 .wrapper { min-height: 100vh; }

@@ -1,53 +1,201 @@
 <div class="auth-container">
   <div class="auth-card">
-    <div class="auth-logo text-center">
-      <img src="/img/logo.png" alt="<%- schoolName %>" class="rounded-circle bg-white p-2 shadow-sm mb-2" style="width: 80px; height: 80px; object-fit: contain;">
-      <h4 class="mt-2 fw-bold text-dark"><%- schoolName %></h4>
-      <p class="text-muted small">Vijay Nagar, Karma Bazar, Prayagraj &bull; Session 2026-27</p>
+    <!-- School Branding -->
+    <div class="auth-logo">
+      <img src="/img/logo.png" alt="<%- schoolName %>" class="auth-logo-img mb-2">
+      <h5 class="fw-bold text-dark mb-1" style="letter-spacing:-0.3px;"><%- schoolName %></h5>
+      <p class="text-muted small mb-0"><i class="fa-solid fa-location-dot text-danger me-1"></i><%- schoolAddress %></p>
     </div>
 
+    <!-- Role Switcher Tabs -->
+    <div class="role-tabs" role="tablist">
+      <button type="button" class="role-tab-btn role-student <%= activeRole === 'student' ? 'active' : '' %>" id="tabBtnStudent" onclick="switchRole('student')">
+        <i class="fa-solid fa-user-graduate"></i> Student
+      </button>
+      <button type="button" class="role-tab-btn role-teacher <%= activeRole === 'teacher' ? 'active' : '' %>" id="tabBtnTeacher" onclick="switchRole('teacher')">
+        <i class="fa-solid fa-chalkboard-user"></i> Teacher
+      </button>
+      <button type="button" class="role-tab-btn role-admin <%= activeRole === 'admin' ? 'active' : '' %>" id="tabBtnAdmin" onclick="switchRole('admin')">
+        <i class="fa-solid fa-shield-halved"></i> Admin
+      </button>
+    </div>
+
+    <!-- Flash Messages -->
     <% if(success_msg && success_msg.length > 0) { %>
-    <div class="alert alert-success"><i class="fa-solid fa-check-circle me-2"></i><%- success_msg %></div>
+    <div class="alert alert-success alert-dismissible fade show d-flex align-items-center py-2 px-3 mb-3" role="alert">
+      <i class="fa-solid fa-circle-check fa-lg me-2 text-success"></i>
+      <div class="small fw-semibold flex-grow-1"><%- success_msg %></div>
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
     <% } %>
     <% if(error_msg && error_msg.length > 0) { %>
-    <div class="alert alert-danger"><i class="fa-solid fa-circle-xmark me-2"></i><%- error_msg %></div>
+    <div class="alert alert-danger alert-dismissible fade show d-flex align-items-center py-2 px-3 mb-3" role="alert">
+      <i class="fa-solid fa-circle-exclamation fa-lg me-2 text-danger"></i>
+      <div class="small fw-semibold flex-grow-1"><%- error_msg %></div>
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
     <% } %>
 
-    <form action="/login" method="POST">
-      <div class="mb-3">
-        <label class="form-label fw-semibold"><i class="fa-solid fa-user me-1"></i> Email or Admission Number</label>
-        <input type="text" name="email" class="form-control form-control-lg" placeholder="Email or Student Admission No (e.g. ADM2601)" required autofocus>
+    <!-- ==================== STUDENT LOGIN SECTION ==================== -->
+    <div id="section-student" class="role-section" style="<%= activeRole === 'student' ? 'display:block;' : 'display:none;' %>">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <span class="auth-portal-badge badge-student">
+          <i class="fa-solid fa-user-graduate me-1"></i> Student &amp; Parent Portal
+        </span>
+        <small class="text-muted">Sign in</small>
       </div>
-      <div class="mb-4">
-        <label class="form-label fw-semibold"><i class="fa-solid fa-lock me-1"></i> Password / Reg. Mobile No</label>
-        <div class="input-group">
-          <input type="password" name="password" id="passwordInput" class="form-control form-control-lg" placeholder="Enter password (Reg. Mobile No for students)" required>
-          <button class="btn btn-outline-secondary" type="button" onclick="togglePass()"><i class="fa-solid fa-eye" id="eyeIcon"></i></button>
-        </div>
-        <div class="small text-muted mt-2">
-          <i class="fa-solid fa-circle-info text-primary me-1"></i>Students can login with their <strong>Admission Number</strong> and <strong>Registered Mobile Number</strong>. No email required!
-        </div>
-      </div>
-      <button type="submit" class="btn btn-primary btn-lg w-100">
-        <i class="fa-solid fa-right-to-bracket me-2"></i>Login
-      </button>
-    </form>
 
-    <div class="mt-4 p-3 bg-light rounded">
-      <small class="text-muted">
-        <strong>Login Help:</strong><br>
-        &bull; <strong>Admin:</strong> admin@school.com / admin123<br>
-        &bull; <strong>Students:</strong> Admission No (e.g. ADM2601) &amp; Mobile No
-      </small>
+      <form action="/login/student" method="POST" autocomplete="on">
+        <input type="hidden" name="role" value="student">
+        <div class="mb-3">
+          <label class="form-label fw-semibold text-secondary small">
+            <i class="fa-solid fa-id-card me-1 text-primary"></i> Admission Number
+          </label>
+          <div class="input-group auth-input-group">
+            <span class="input-group-text"><i class="fa-solid fa-user"></i></span>
+            <input type="text" name="email" class="form-control" placeholder="Enter Admission No (e.g. ADM260006)" required <%= activeRole === 'student' ? 'autofocus' : '' %>>
+          </div>
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label fw-semibold text-secondary small">
+            <i class="fa-solid fa-lock me-1 text-primary"></i> Registered Mobile Number
+          </label>
+          <div class="input-group auth-input-group">
+            <span class="input-group-text"><i class="fa-solid fa-key"></i></span>
+            <input type="password" name="password" id="passStudent" class="form-control" placeholder="Enter registered mobile number" required>
+            <button class="btn btn-outline-secondary" type="button" onclick="togglePass('passStudent', this)">
+              <i class="fa-solid fa-eye"></i>
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-auth-student w-100 py-2">
+          <i class="fa-solid fa-arrow-right-to-bracket me-2"></i>Sign In as Student
+        </button>
+      </form>
     </div>
+
+    <!-- ==================== TEACHER LOGIN SECTION ==================== -->
+    <div id="section-teacher" class="role-section" style="<%= activeRole === 'teacher' ? 'display:block;' : 'display:none;' %>">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <span class="auth-portal-badge badge-teacher">
+          <i class="fa-solid fa-chalkboard-user me-1"></i> Faculty &amp; Teacher Portal
+        </span>
+        <small class="text-muted">Sign in</small>
+      </div>
+
+      <form action="/login/teacher" method="POST" autocomplete="on">
+        <input type="hidden" name="role" value="teacher">
+        <div class="mb-3">
+          <label class="form-label fw-semibold text-secondary small">
+            <i class="fa-solid fa-address-card me-1 text-success"></i> Teacher Employee ID or Email
+          </label>
+          <div class="input-group auth-input-group">
+            <span class="input-group-text"><i class="fa-solid fa-user-tie"></i></span>
+            <input type="text" name="email" class="form-control" placeholder="Enter Teacher ID (e.g. EMP260002) or Email" required <%= activeRole === 'teacher' ? 'autofocus' : '' %>>
+          </div>
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label fw-semibold text-secondary small">
+            <i class="fa-solid fa-lock me-1 text-success"></i> Password (Mobile Number)
+          </label>
+          <div class="input-group auth-input-group">
+            <span class="input-group-text"><i class="fa-solid fa-key"></i></span>
+            <input type="password" name="password" id="passTeacher" class="form-control" placeholder="Enter your registered mobile number" required>
+            <button class="btn btn-outline-secondary" type="button" onclick="togglePass('passTeacher', this)">
+              <i class="fa-solid fa-eye"></i>
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-auth-teacher w-100 py-2">
+          <i class="fa-solid fa-arrow-right-to-bracket me-2"></i>Sign In as Teacher
+        </button>
+      </form>
+    </div>
+
+    <!-- ==================== ADMIN LOGIN SECTION ==================== -->
+    <div id="section-admin" class="role-section" style="<%= activeRole === 'admin' ? 'display:block;' : 'display:none;' %>">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <span class="auth-portal-badge badge-admin">
+          <i class="fa-solid fa-shield-halved me-1 text-warning"></i> Administrator Portal
+        </span>
+        <small class="text-muted">Secure Access</small>
+      </div>
+
+      <form action="/login/admin" method="POST" autocomplete="on">
+        <input type="hidden" name="role" value="admin">
+        <div class="mb-3">
+          <label class="form-label fw-semibold text-secondary small">
+            <i class="fa-solid fa-envelope me-1 text-dark"></i> Administrator Email
+          </label>
+          <div class="input-group auth-input-group">
+            <span class="input-group-text"><i class="fa-solid fa-user-shield"></i></span>
+            <input type="email" name="email" class="form-control" placeholder="Enter administrator email" required <%= activeRole === 'admin' ? 'autofocus' : '' %>>
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <div class="d-flex justify-content-between align-items-center">
+            <label class="form-label fw-semibold text-secondary small mb-1">
+              <i class="fa-solid fa-lock me-1 text-dark"></i> Password
+            </label>
+            <a href="/admin/reset-password" class="text-decoration-none small fw-semibold text-primary">
+              <i class="fa-solid fa-rotate-left me-1"></i>Reset Password?
+            </a>
+          </div>
+          <div class="input-group auth-input-group">
+            <span class="input-group-text"><i class="fa-solid fa-key"></i></span>
+            <input type="password" name="password" id="passAdmin" class="form-control" placeholder="Enter administrator password" required>
+            <button class="btn btn-outline-secondary" type="button" onclick="togglePass('passAdmin', this)">
+              <i class="fa-solid fa-eye"></i>
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-auth-admin w-100 py-2 mt-2">
+          <i class="fa-solid fa-arrow-right-to-bracket me-2"></i>Sign In as Admin
+        </button>
+      </form>
+    </div>
+
   </div>
 </div>
 
 <script>
-function togglePass() {
-  const input = document.getElementById('passwordInput');
-  const icon = document.getElementById('eyeIcon');
-  if (input.type === 'password') { input.type = 'text'; icon.className = 'fa-solid fa-eye-slash'; }
-  else { input.type = 'password'; icon.className = 'fa-solid fa-eye'; }
+function switchRole(role) {
+  // Update Tabs
+  document.querySelectorAll('.role-tab-btn').forEach(btn => btn.classList.remove('active'));
+  const targetBtn = document.getElementById('tabBtn' + role.charAt(0).toUpperCase() + role.slice(1));
+  if (targetBtn) targetBtn.classList.add('active');
+
+  // Update Sections
+  document.querySelectorAll('.role-section').forEach(sec => sec.style.display = 'none');
+  const targetSec = document.getElementById('section-' + role);
+  if (targetSec) {
+    targetSec.style.display = 'block';
+    const firstInput = targetSec.querySelector('input[type="text"], input[type="email"]');
+    if (firstInput) firstInput.focus();
+  }
+
+  // Update URL history state without reloading
+  if (window.history && window.history.replaceState) {
+    window.history.replaceState(null, '', '/login/' + role);
+  }
+}
+
+function togglePass(inputId, btn) {
+  const input = document.getElementById(inputId);
+  const icon = btn.querySelector('i');
+  if (!input) return;
+  if (input.type === 'password') {
+    input.type = 'text';
+    icon.className = 'fa-solid fa-eye-slash';
+  } else {
+    input.type = 'password';
+    icon.className = 'fa-solid fa-eye';
+  }
 }
 </script>

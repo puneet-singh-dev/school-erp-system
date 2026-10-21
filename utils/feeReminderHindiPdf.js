@@ -4,122 +4,166 @@ const fs = require('fs');
 const moment = require('moment');
 
 /**
- * Draws a single Hindi Fee Reminder Notice slip (takes ~262pt height)
+ * Draws a single Unpaid Fee Reminder Notice slip based on the school notice slip format.
+ * Formatted to fit exactly 4 slips on a single A4 sheet (2 columns x 2 rows).
  */
-function drawSingleHindiReminderSlip(doc, student, pendingFees, y, height) {
-  const x = 20;
-  const w = 555;
+function drawSingleFeeNoticeSlip(doc, student, schoolInfo, x, y, width, height) {
+  doc.save();
+
+  // Outer Border Box
+  doc.lineWidth(0.8).strokeColor('#1e293b');
+  doc.rect(x, y, width, height).stroke();
+
+  const padX = x + 10;
+  const contentW = width - 20;
+
+  // Header Section with Logo
   const logoPath = path.join(__dirname, '../public/img/logo.png');
+  const logoSize = 32;
+  let textStartX = padX;
+  let textAvailableW = contentW;
 
-  // Outer border
-  doc.lineWidth(0.8).strokeColor('#000000');
-  doc.rect(x, y, w, height).stroke();
-
-  // Header Box
-  const headH = 46;
-  doc.rect(x, y, w, headH).fillAndStroke('#f8fafc', '#cbd5e0');
-
-  // Logo on Left
   if (fs.existsSync(logoPath)) {
     try {
-      doc.image(logoPath, x + 8, y + 4, { width: 38, height: 38 });
+      doc.image(logoPath, padX, y + 6, { width: logoSize, height: logoSize });
+      textStartX = padX + logoSize + 6;
+      textAvailableW = contentW - logoSize - 6;
     } catch (e) {}
   }
 
-  // School Header in English as requested
-  doc.fillColor('#1e3a8a').font('Helvetica-Bold').fontSize(10.5)
-     .text('SHRI AMRIT LAL SMARAK SCHOOL AND COLLEGE', x + 50, y + 5, { width: w - 100, align: 'center' });
+  // School Name (Uppercase, bold)
+  const schoolName = (schoolInfo && schoolInfo.name)
+    ? schoolInfo.name.toUpperCase()
+    : 'SHRI AMRIT LAL SMARAK SCHOOL AND COLLEGE';
   
-  doc.fillColor('#334155').font('Helvetica').fontSize(7.5)
-     .text('Vijay Nagar, Karma Bazar, Prayagraj (U.P.)  |  Mobile: 9129914501', x + 50, y + 19, { width: w - 100, align: 'center' });
+  doc.font('Helvetica-Bold').fontSize(8.5).fillColor('#0f172a');
+  doc.text(schoolName, textStartX, y + 6, { width: textAvailableW, align: 'center', lineGap: 1 });
 
-  doc.fillColor('#b91c1c').font('Hindi').fontSize(8.5)
-     .text('शुल्क अनुस्मारक पत्र / FEE REMINDER NOTICE  (Session: 2026-27)', x + 50, y + 31, { width: w - 100, align: 'center' });
-
-  // Notice Metadata Bar (Notice No & Date - WITHOUT admission number)
-  const metaY = y + headH + 2;
-  const noticeRef = `FR26/${student.class_name ? student.class_name.replace(/\s+/g,'') : 'CLS'}-R${student.roll_number || student.id}`;
-  doc.fillColor('#000000').font('Hindi').fontSize(7.5);
-  doc.text(`सूचना संदर्भ: ${noticeRef}`, x + 8, metaY);
-  doc.text(`दिनांक: ${moment().format('DD/MM/YYYY')}`, x + w - 110, metaY, { width: 100, align: 'right' });
-
-  // Salutation: "प्रिय अभिभावक," (Without guardian name)
-  const salutationY = metaY + 12;
-  doc.font('Hindi').fontSize(8.5).fillColor('#1e293b')
-     .text('प्रिय अभिभावक,', x + 8, salutationY);
-
-  // Student Details & Main Notice Message in Hindi (WITHOUT admission number)
-  const bodyY = salutationY + 13;
-  const studentInfoLine = `सादर अवगत कराना है कि आपके पाल्य/पाल्या ${student.name}, कक्षा - ${student.class_name} (वर्ग: ${student.section || 'A'}), अनुक्रमांक/रोल नं. - ${student.roll_number || '-'} का शैक्षणिक सत्र 2026-27 का विद्यालय शुल्क निम्नानुसार बकाया है:`;
+  // School Address
+  const schoolAddress = (schoolInfo && schoolInfo.address)
+    ? schoolInfo.address
+    : 'Vijay Nagar, Karma Bazar, Prayagraj (U.P.)';
   
-  doc.font('Hindi').fontSize(7.8).fillColor('#334155')
-     .text(studentInfoLine, x + 8, bodyY, { width: w - 16, lineGap: 1.5 });
+  doc.font('Helvetica').fontSize(6.5).fillColor('#475569');
+  doc.text(schoolAddress, textStartX, doc.y + 1, { width: textAvailableW, align: 'center', lineGap: 1 });
 
-  // Mini Pending Fees Table
-  const tableY = bodyY + 22;
-  const col1W = 240;
-  const col2W = 95;
-  const col3W = 95;
-  const col4W = 105;
-  const rowH = 13;
+  // Document Heading: Unpaid Fee Notice
+  doc.font('Helvetica-Bold').fontSize(8).fillColor('#000000');
+  doc.text('Unpaid Fee Notice', textStartX, doc.y + 2, { width: textAvailableW, align: 'center' });
 
-  // Table Header
-  doc.rect(x + 8, tableY, w - 16, rowH).fillAndStroke('#e2e8f0', '#000000');
-  doc.fillColor('#000000').font('Hindi').fontSize(7);
-  doc.text('शुल्क मद (Fee Particulars)', x + 12, tableY + 2.5, { width: col1W - 8 });
-  doc.text('कुल शुल्क (Total)', x + 8 + col1W, tableY + 2.5, { width: col2W, align: 'right' });
-  doc.text('जमा शुल्क (Paid)', x + 8 + col1W + col2W, tableY + 2.5, { width: col3W, align: 'right' });
-  doc.text('बकाया राशि (Balance Due)', x + 8 + col1W + col2W + col3W - 5, tableY + 2.5, { width: col4W, align: 'right' });
+  // Dividing Line Under Header
+  const headerBottomY = Math.max(y + 45, doc.y + 4);
+  doc.lineWidth(0.6).strokeColor('#334155');
+  doc.moveTo(x, headerBottomY).lineTo(x + width, headerBottomY).stroke();
 
-  // Table Data Row
-  const row1Y = tableY + rowH;
-  doc.rect(x + 8, row1Y, w - 16, rowH + 2).stroke('#000000');
-  doc.font('Hindi').fontSize(7.5);
+  // Student Details Key-Value Section
+  let curY = headerBottomY + 6;
+  const labelColW = 50;
+  const colonX = padX + labelColW;
+  const valColX = colonX + 6;
+  const valColW = contentW - labelColW - 6;
+  const rowHeight = 12.5;
 
-  let feeTypesText = pendingFees && pendingFees.length > 0 ? pendingFees.map(f => f.fee_type).join(', ') : 'समस्त बकाया विद्यालय शुल्क';
-  if (student.pending_months_text && student.pending_months_text !== 'None') {
-    feeTypesText = `बकाया माह: ${student.pending_months_text}`;
+  const studentDetails = [
+    { label: 'Adm No.', val: student.admission_no || '-' },
+    { label: 'Student', val: student.name || '-' },
+    { label: 'Father', val: student.father_name || '-' },
+    { label: 'Class/Sec', val: `${student.class_name || '-'} / ${student.section || 'A'}` },
+    { label: 'Address', val: (student.address || 'Karma Bazar, Prayagraj').replace(/\r?\n|\r/g, ' ') }
+  ];
+
+  studentDetails.forEach(item => {
+    doc.font('Helvetica').fontSize(7.5).fillColor('#334155');
+    doc.text(item.label, padX, curY, { width: labelColW });
+    doc.text(':', colonX, curY);
+    doc.font('Helvetica-Bold').fontSize(7.5).fillColor('#000000');
+    doc.text(item.val, valColX, curY, { width: valColW, lineBreak: false, ellipsis: true });
+    curY += rowHeight;
+  });
+
+  // Salutation: Dear Parents/ Guardians
+  curY += 2;
+  doc.font('Helvetica-Bold').fontSize(8).fillColor('#0f172a');
+  doc.text('Dear Parents/ Guardians', padX, curY);
+  curY += 12;
+
+  // Notice Body Paragraph
+  // Build breakdown string: e.g. Bal. SEP (1500),OCT (1700)
+  const prevBal = parseFloat(student.previous_balance || 0);
+  const monthlyRate = parseFloat(student.monthly_rate || student.monthly_tuition || 500);
+  const unpaidMonths = student.unpaid_months || [];
+
+  let breakdownItems = [];
+  if (prevBal > 0) {
+    breakdownItems.push(`Bal. (${Math.round(prevBal)})`);
   }
-  if (parseFloat(student.previous_balance || 0) > 0) {
-    feeTypesText += ` (पूर्व सत्र बकाया: ₹${parseFloat(student.previous_balance).toFixed(0)})`;
+  unpaidMonths.forEach(m => {
+    breakdownItems.push(`${m} (${Math.round(monthlyRate)})`);
+  });
+
+  let breakdownText = breakdownItems.join(',');
+  if (!breakdownText) {
+    breakdownText = student.pending_months_text || 'Current Session';
   }
-  const totalAmount = parseFloat(student.total_fees || 0);
-  const paidAmount = parseFloat(student.paid || 0);
-  const balanceAmount = parseFloat(student.balance || (totalAmount - paidAmount));
 
-  doc.text(feeTypesText.slice(0, 65), x + 12, row1Y + 3, { width: col1W - 8 });
-  doc.text(`₹ ${totalAmount.toFixed(2)}`, x + 8 + col1W, row1Y + 3, { width: col2W, align: 'right' });
-  doc.text(`₹ ${paidAmount.toFixed(2)}`, x + 8 + col1W + col2W, row1Y + 3, { width: col3W, align: 'right' });
-  
-  doc.fillColor('#b91c1c').text(`₹ ${balanceAmount.toFixed(2)}`, x + 8 + col1W + col2W + col3W - 5, row1Y + 3, { width: col4W, align: 'right' })
-     .fillColor('#000000');
+  const totalAmount = Math.round(parseFloat(student.balance || student.total_fees || 0));
 
-  // Comprehensive, detailed Hindi appeal (Notice body made longer as requested)
-  const requestY = row1Y + rowH + 5;
-  const line1 = 'विद्यालय आपके बच्चे के उज्ज्वल भविष्य, सर्वांगीण विकास एवं उच्च गुणवत्तापूर्ण शिक्षा हेतु सदैव समर्पित है। विद्यालय के सुचारू संचालन, योग्य अध्यापकों की व्यवस्था, प्रयोगशाला एवं आगामी परीक्षाओं के सफल आयोजन हेतु समय पर शुल्क का भुगतान अत्यंत आवश्यक है।';
-  const line2 = `अतः आपसे विनम्र अनुरोध है कि कृपया आगामी ३ कार्य दिवसों के भीतर विद्यालय कार्यालय में उपस्थित होकर उक्त बकाया राशि ₹ ${balanceAmount.toFixed(2)} जमा करने का कष्ट करें, जिससे छात्र/छात्रा के पठन-पाठन, दैनिक उपस्थिति एवं परीक्षा प्रक्रिया में किसी प्रकार का व्यवधान उत्पन्न न हो।`;
-  
-  doc.font('Hindi').fontSize(7.2).fillColor('#334155')
-     .text(line1, x + 8, requestY, { width: w - 16, lineGap: 1.2 })
-     .text(line2, x + 8, requestY + 23, { width: w - 16, lineGap: 1.2 });
+  const noticeBodyText = `This is to remind you that your ward fees due for the month(s) of ${breakdownText} total amount Rs. ${totalAmount} . Kindly Co-Operate and Pay immediately.`;
 
-  // Footer Row: Note on Left & Principal Signature on Right
-  const footY = y + height - 34;
-  doc.font('Hindi').fontSize(6.5).fillColor('#64748b')
-     .text('नोट: यदि आप उक्त शुल्क पूर्व में जमा कर चुके हैं, तो कृपया कार्यालय में रसीद दिखाकर अभिलेख संशोधित करा लें।', x + 8, footY + 8, { width: 330 });
+  doc.font('Helvetica').fontSize(7.6).fillColor('#1e293b');
+  doc.text(noticeBodyText, padX, curY, {
+    width: contentW,
+    align: 'left',
+    lineGap: 2.2
+  });
 
-  const sigX = x + w - 180;
-  doc.fillColor('#1e293b').font('Hindi').fontSize(7.5)
-     .text('प्रधानाचार्य / प्रबन्धक (Principal)', sigX, footY + 4, { width: 170, align: 'right' });
-  doc.fontSize(6.8).font('Helvetica-Bold').fillColor('#1e3a8a')
-     .text('Shri Amrit Lal Smarak School & College', sigX, footY + 16, { width: 170, align: 'right' });
-  doc.fontSize(6.5).font('Helvetica').fillColor('#475569')
-     .text('Helpline: 9129914501', sigX, footY + 26, { width: 170, align: 'right' });
+  // Thank You
+  const thankYouY = y + height - 36;
+  doc.font('Helvetica-Bold').fontSize(8).fillColor('#0f172a');
+  doc.text('Thank You', padX, thankYouY);
+
+  // Footer: Date on Left, Principal on Right
+  const footerY = y + height - 20;
+  const todayDateStr = moment().format('DD/MM/YYYY');
+  doc.font('Helvetica-Bold').fontSize(7.5).fillColor('#000000');
+  doc.text(`Date: ${todayDateStr}`, padX, footerY);
+
+  doc.font('Helvetica-Bold').fontSize(8).fillColor('#000000');
+  doc.text('Principal', padX + contentW - 75, footerY, { width: 75, align: 'right' });
+
+  doc.restore();
 }
 
 /**
- * Generates class-wise fee reminder notices:
- * Formatted with 3 student notices per A4 page, separated by dotted cutting lines.
+ * Draws dashed scissor cutting lines between the 4 notice slots on an A4 page.
+ */
+function drawCutLines(doc) {
+  doc.save();
+
+  // Vertical center cut line at X = 297.64
+  const vCutX = 297.64;
+  doc.lineWidth(0.5).strokeColor('#94a3b8').dash(3, { space: 3 });
+  doc.moveTo(vCutX, 10).lineTo(vCutX, 831.89).stroke();
+
+  // Horizontal center cut line at Y = 420.94
+  const hCutY = 420.94;
+  doc.lineWidth(0.5).strokeColor('#94a3b8').dash(3, { space: 3 });
+  doc.moveTo(10, hCutY).lineTo(585.28, hCutY).stroke();
+
+  // Scissor icon / text helpers on the cutting guides
+  doc.font('Helvetica').fontSize(6).fillColor('#64748b');
+  doc.text('✂', vCutX - 3, 14);
+  doc.text('✂', vCutX - 3, hCutY - 3);
+  doc.text('✂', vCutX - 3, 824);
+
+  doc.text('✂', 14, hCutY - 3);
+  doc.text('✂', 574, hCutY - 3);
+
+  doc.restore();
+}
+
+/**
+ * Generates Fee Reminder Notice PDF with exactly 4 student notices per A4 sheet (2x2 grid).
  */
 function generateClassFeeRemindersHindiPDF(res, selectedClass, studentsList, classFeeStructure = []) {
   const doc = new PDFDocument({
@@ -127,49 +171,52 @@ function generateClassFeeRemindersHindiPDF(res, selectedClass, studentsList, cla
     margins: { top: 0, bottom: 0, left: 0, right: 0 }
   });
 
-  const fontPath = path.join(__dirname, '../public/fonts/NotoSansDevanagari.ttf');
-  doc.registerFont('Hindi', fontPath);
-
+  const className = (selectedClass && selectedClass.name) ? selectedClass.name.replace(/\s+/g, '_') : 'Class';
+  const classSec = (selectedClass && selectedClass.section) ? selectedClass.section : 'All';
   res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `inline; filename=fees_reminders_${selectedClass.name}_${selectedClass.section}.pdf`);
+  res.setHeader('Content-Disposition', `inline; filename=fee_notices_${className}_${classSec}.pdf`);
   doc.pipe(res);
 
-  const slipHeight = 264;
-  const startY1 = 12;
-  const startY2 = 288;
-  const startY3 = 564;
+  const schoolInfo = {
+    name: (process.env.SCHOOL_NAME && process.env.SCHOOL_NAME !== 'School ERP')
+      ? process.env.SCHOOL_NAME
+      : 'Shri Amrit Lal Smarak School And College',
+    address: process.env.SCHOOL_ADDRESS || 'Vijay Nagar, Karma Bazar, Prayagraj (U.P) - 211010'
+  };
 
-  const positions = [startY1, startY2, startY3];
+  // Dimensions for 2x2 layout on A4 (595.28 pt x 841.89 pt)
+  const slipW = 268;
+  const slipH = 390;
+
+  // 4 Slot Coordinates
+  const slots = [
+    { x: 18, y: 16 },   // Top-Left (Slot 0)
+    { x: 307, y: 16 },  // Top-Right (Slot 1)
+    { x: 18, y: 434 },  // Bottom-Left (Slot 2)
+    { x: 307, y: 434 }  // Bottom-Right (Slot 3)
+  ];
 
   studentsList.forEach((student, index) => {
-    const slotOnPage = index % 3;
+    const slotIndex = index % 4;
 
-    if (index > 0 && slotOnPage === 0) {
+    // Start a new A4 page every 4 students
+    if (index > 0 && slotIndex === 0) {
       doc.addPage({ size: 'A4', margins: { top: 0, bottom: 0, left: 0, right: 0 } });
     }
 
-    const curY = positions[slotOnPage];
-    drawSingleHindiReminderSlip(doc, student, classFeeStructure, curY, slipHeight);
-
-    // Draw horizontal dashed cut line after slot 0 and slot 1
-    if (slotOnPage === 0) {
-      const cutY1 = 280;
-      doc.save();
-      doc.moveTo(10, cutY1).lineTo(585, cutY1).dash(4, { space: 4 }).strokeColor('#666666').stroke();
-      doc.font('Helvetica-Bold').fontSize(6.5).fillColor('#666666');
-      doc.text('✂ - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - CUT ALONG LINE - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - ✂', 10, cutY1 - 3, { width: 575, align: 'center' });
-      doc.restore();
-    } else if (slotOnPage === 1) {
-      const cutY2 = 556;
-      doc.save();
-      doc.moveTo(10, cutY2).lineTo(585, cutY2).dash(4, { space: 4 }).strokeColor('#666666').stroke();
-      doc.font('Helvetica-Bold').fontSize(6.5).fillColor('#666666');
-      doc.text('✂ - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - CUT ALONG LINE - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - ✂', 10, cutY2 - 3, { width: 575, align: 'center' });
-      doc.restore();
+    // Draw cut lines once per new page
+    if (slotIndex === 0) {
+      drawCutLines(doc);
     }
+
+    const pos = slots[slotIndex];
+    drawSingleFeeNoticeSlip(doc, student, schoolInfo, pos.x, pos.y, slipW, slipH);
   });
 
   doc.end();
 }
 
-module.exports = { generateClassFeeRemindersHindiPDF };
+module.exports = {
+  generateClassFeeRemindersHindiPDF,
+  generateFeeReminderNoticesPDF: generateClassFeeRemindersHindiPDF
+};

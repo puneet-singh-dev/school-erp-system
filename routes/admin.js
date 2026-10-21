@@ -483,12 +483,13 @@ router.post('/teachers/add', async (req, res) => {
       const year = new Date().getFullYear().toString().slice(-2);
       employee_id = `EMP${year}${String(lastId + 1).padStart(4, '0')}`;
     }
-    const hashed = await bcrypt.hash(password || 'teacher123', 10);
+    const teacherDefaultPass = (password && password.trim()) || (phone && phone.trim()) || 'teacher123';
+    const hashed = await bcrypt.hash(teacherDefaultPass, 10);
     const [userResult] = await db.query('INSERT INTO users (name,email,password,role,phone,address) VALUES (?,?,?,?,?,?)',
       [name, email, hashed, 'teacher', phone, address]);
     await db.query('INSERT INTO teachers (user_id,employee_id,department,designation,date_of_joining,qualification,salary) VALUES (?,?,?,?,?,?,?)',
       [userResult.insertId, employee_id, department, designation, date_of_joining || null, qualification, salary || 0]);
-    req.flash('success_msg', `Teacher added! Employee ID: ${employee_id}`);
+    req.flash('success_msg', `Teacher added! Employee ID: ${employee_id}. Login password: ${phone ? 'Teacher\'s mobile number' : 'teacher123'}`);
     res.redirect('/admin/teachers');
   } catch (err) { console.error(err); req.flash('error_msg', 'Error: ' + err.message); res.redirect('/admin/teachers/add'); }
 });
@@ -1608,23 +1609,48 @@ router.get('/gallery', async (req, res) => {
   }
 });
 
-router.post('/gallery/upload', uploadGallery.single('image'), async (req, res) => {
-  try {
-    if (!req.file) {
-      req.flash('error_msg', 'Please select an image file to upload.');
+router.post('/gallery/upload', (req, res, next) => {
+  uploadGallery.array('images', 30)(req, res, (err) => {
+    if (err) {
+      console.error('Gallery upload error:', err);
+      req.flash('error_msg', 'Upload error: ' + (err.message || 'Please select valid image files under 10MB each.'));
       return res.redirect('/admin/gallery');
     }
+    next();
+  });
+}, async (req, res) => {
+  try {
+    const files = req.files || [];
+    if (req.file) files.push(req.file);
+
+    if (!files.length) {
+      req.flash('error_msg', 'Please select at least one image file to upload.');
+      return res.redirect('/admin/gallery');
+    }
+
     const { title, description, category } = req.body;
     const finalCategory = (category && category.trim()) ? category.trim() : 'General';
-    await db.query(
-      `INSERT INTO gallery (title, description, category, image_path, uploaded_by) VALUES (?, ?, ?, ?, ?)`,
-      [title || 'Campus Photo', description || '', finalCategory, req.file.filename, req.session.user.id]
-    );
-    req.flash('success_msg', 'Photo uploaded to school gallery successfully!');
+    const adminId = (req.session && req.session.user) ? req.session.user.id : null;
+
+    let count = 0;
+    for (const f of files) {
+      const parsedBase = path.parse(f.originalname).name;
+      const finalTitle = (files.length === 1 && title && title.trim())
+        ? title.trim()
+        : (title && title.trim() ? `${title.trim()} (${count + 1})` : parsedBase);
+
+      await db.query(
+        `INSERT INTO gallery (title, description, category, image_path, uploaded_by) VALUES (?, ?, ?, ?, ?)`,
+        [finalTitle, description || '', finalCategory, f.filename, adminId]
+      );
+      count++;
+    }
+
+    req.flash('success_msg', `${count} photo${count > 1 ? 's' : ''} uploaded to school gallery successfully!`);
     res.redirect('/admin/gallery');
   } catch (err) {
     console.error('Upload error:', err);
-    req.flash('error_msg', 'Error uploading image: ' + err.message);
+    req.flash('error_msg', 'Error uploading images: ' + err.message);
     res.redirect('/admin/gallery');
   }
 });
@@ -1845,6 +1871,53 @@ router.post('/homework/delete/:id', async (req, res) => {
   } catch (err) {
     req.flash('error_msg', 'Error deleting homework: ' + err.message);
     res.redirect('/admin/homework');
+  }
+});
+
+// ==================== ADMIN PASSWORD CHANGE ====================
+router.get('/change-password', (req, res) => {
+  res.render('admin/change-password', { title: 'Change Admin Password' });
+});
+
+router.post('/change-password', async (req, res) => {
+  const { current_password, new_password, confirm_password } = req.body;
+  try {
+    if (!current_password || !new_password || !confirm_password) {
+      req.flash('error_msg', 'Please fill in all password fields.');
+      return res.redirect('/admin/change-password');
+    }
+
+    if (new_password.length < 6) {
+      req.flash('error_msg', 'New password must be at least 6 characters long.');
+      return res.redirect('/admin/change-password');
+    }
+
+    if (new_password !== confirm_password) {
+      req.flash('error_msg', 'New password and confirm password do not match.');
+      return res.redirect('/admin/change-password');
+    }
+
+    const [rows] = await db.query('SELECT * FROM users WHERE id=? AND role="admin"', [req.session.user.id]);
+    if (!rows.length) {
+      req.flash('error_msg', 'Admin user account not found.');
+      return res.redirect('/admin/change-password');
+    }
+
+    const isMatch = await bcrypt.compare(current_password, rows[0].password);
+    if (!isMatch) {
+      req.flash('error_msg', 'Current password is incorrect.');
+      return res.redirect('/admin/change-password');
+    }
+
+    const hashed = await bcrypt.hash(new_password, 10);
+    await db.query('UPDATE users SET password=? WHERE id=?', [hashed, req.session.user.id]);
+
+    req.flash('success_msg', 'Admin password changed successfully!');
+    res.redirect('/admin');
+  } catch (err) {
+    console.error('Admin change password error:', err);
+    req.flash('error_msg', 'Error updating password: ' + err.message);
+    res.redirect('/admin/change-password');
   }
 });
 

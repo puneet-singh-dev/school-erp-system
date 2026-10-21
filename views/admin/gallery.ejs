@@ -19,12 +19,13 @@
       <form action="/admin/gallery/upload" method="POST" enctype="multipart/form-data">
         <div class="modal-body">
           <div class="mb-3">
-            <label class="form-label fw-semibold">Photo Title *</label>
-            <input type="text" name="title" class="form-control" placeholder="e.g. Annual Sports Meet 2026, Science Fair" required>
+            <label class="form-label fw-semibold">Photo Title / Album Name</label>
+            <input type="text" name="title" class="form-control" placeholder="e.g. Annual Sports Meet, Science Fair, Campus">
+            <small class="text-muted">Optional. If left blank, photo file names will be used.</small>
           </div>
           <div class="mb-3">
             <label class="form-label fw-semibold">Category / Event *</label>
-            <input type="text" name="category" class="form-control" list="categoryOptions" placeholder="e.g. Annual Function, Sports, Campus, Republic Day" required>
+            <input type="text" name="category" class="form-control" list="categoryOptions" placeholder="e.g. Annual Function, Sports, Campus, Republic Day" value="Campus &amp; Facilities" required>
             <datalist id="categoryOptions">
               <option value="Campus &amp; Facilities">
               <option value="Annual Sports Meet">
@@ -35,9 +36,12 @@
             </datalist>
           </div>
           <div class="mb-3">
-            <label class="form-label fw-semibold">Select Photo File *</label>
-            <input type="file" name="image" class="form-control" accept="image/*" required>
-            <small class="text-muted">Accepted formats: JPG, PNG, WEBP (Max: 10MB)</small>
+            <label class="form-label fw-semibold d-flex justify-content-between align-items-center">
+              <span>Select Photos *</span>
+              <span class="badge bg-primary">Multiple Allowed</span>
+            </label>
+            <input type="file" name="images" class="form-control" accept="image/*" multiple required>
+            <small class="text-muted">Hold <kbd>Ctrl</kbd> or <kbd>Shift</kbd> to select multiple photos at once. (JPG, PNG, WEBP)</small>
           </div>
           <div class="mb-3">
             <label class="form-label fw-semibold">Description / Caption (Optional)</label>
@@ -46,7 +50,7 @@
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn btn-primary"><i class="fa-solid fa-cloud-arrow-up me-1"></i>Upload Photo</button>
+          <button type="submit" class="btn btn-primary"><i class="fa-solid fa-cloud-arrow-up me-1"></i>Upload Photo(s)</button>
         </div>
       </form>
     </div>
