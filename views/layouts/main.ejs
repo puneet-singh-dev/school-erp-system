@@ -152,6 +152,170 @@
     </div>
   </div>
 
+  <% if (user) { %>
+  <!-- Inactivity Warning Modal -->
+  <div class="modal fade" id="sessionExpiryModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="sessionExpiryModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content shadow-lg border-warning" style="border-width: 2px;">
+        <div class="modal-header bg-warning bg-opacity-10 py-3">
+          <h6 class="modal-title fw-bold text-dark mb-0" id="sessionExpiryModalLabel">
+            <i class="fa-solid fa-triangle-exclamation text-warning me-2 fa-lg"></i> Session Inactivity Warning
+          </h6>
+        </div>
+        <div class="modal-body py-4">
+          <p class="text-secondary mb-3">
+            You have been inactive for several minutes. For your security, you will be automatically signed out in:
+          </p>
+          <div class="text-center my-3">
+            <span id="sessionCountdownBadge" class="badge bg-danger px-3 py-2 fs-5">
+              <i class="fa-regular fa-clock me-1"></i> <span id="sessionCountdownSeconds">120</span>s
+            </span>
+          </div>
+          <p class="small text-muted text-center mb-0">
+            Click <strong>Stay Signed In</strong> below or interact with the page to keep working.
+          </p>
+        </div>
+        <div class="modal-footer bg-light py-2">
+          <form action="/logout" method="POST" class="d-inline">
+            <button type="submit" class="btn btn-outline-secondary btn-sm">
+              <i class="fa-solid fa-right-from-bracket me-1"></i> Logout Now
+            </button>
+          </form>
+          <button type="button" class="btn btn-primary btn-sm px-3" id="btnStaySignedIn">
+            <i class="fa-solid fa-arrow-rotate-right me-1"></i> Stay Signed In
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (function () {
+    // Session Inactivity & Security Guard
+    const userRole = '<%- user.role %>';
+    const inactivityLimitMinutes = <%- sessionTimeoutMinutes || 15 %>;
+    const INACTIVITY_LIMIT_MS = inactivityLimitMinutes * 60 * 1000;
+    const WARNING_BEFORE_EXPIRY_MS = 2 * 60 * 1000; // Show warning 2 mins before expiry
+    const WARNING_TRIGGER_MS = INACTIVITY_LIMIT_MS - WARNING_BEFORE_EXPIRY_MS;
+
+    let lastActivityTime = Date.now();
+    let warningModalInstance = null;
+    let countdownInterval = null;
+    let isWarningShown = false;
+    let lastServerPingTime = Date.now();
+
+    function getModal() {
+      if (!warningModalInstance && window.bootstrap) {
+        const el = document.getElementById('sessionExpiryModal');
+        if (el) warningModalInstance = new bootstrap.Modal(el);
+      }
+      return warningModalInstance;
+    }
+
+    function pingServerKeepalive() {
+      lastServerPingTime = Date.now();
+      fetch('/api/session-ping')
+        .then(res => {
+          if (res.status === 401) {
+            window.location.href = '/login/' + userRole + '?reason=expired';
+          }
+        })
+        .catch(() => {});
+    }
+
+    function resetActivity(triggerServerPing = false) {
+      lastActivityTime = Date.now();
+      if (isWarningShown) {
+        hideWarning();
+      }
+      // Throttle client-to-server keepalives: at most once every 60 seconds of continuous usage
+      if (triggerServerPing || (Date.now() - lastServerPingTime > 60 * 1000)) {
+        pingServerKeepalive();
+      }
+    }
+
+    function showWarning() {
+      isWarningShown = true;
+      const modal = getModal();
+      if (modal) modal.show();
+
+      updateCountdownDisplay();
+      if (countdownInterval) clearInterval(countdownInterval);
+      countdownInterval = setInterval(updateCountdownDisplay, 1000);
+    }
+
+    function hideWarning() {
+      isWarningShown = false;
+      if (countdownInterval) {
+        clearInterval(countdownInterval);
+        countdownInterval = null;
+      }
+      const modal = getModal();
+      if (modal) modal.hide();
+    }
+
+    function updateCountdownDisplay() {
+      const now = Date.now();
+      const elapsed = now - lastActivityTime;
+      const remainingMs = Math.max(0, INACTIVITY_LIMIT_MS - elapsed);
+      const remainingSec = Math.ceil(remainingMs / 1000);
+
+      const countEl = document.getElementById('sessionCountdownSeconds');
+      if (countEl) countEl.textContent = remainingSec;
+
+      if (remainingMs <= 0) {
+        hideWarning();
+        window.location.href = '/login/' + userRole + '?reason=inactivity';
+      }
+    }
+
+    // Monitor user interaction events
+    const interactionEvents = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart'];
+    let eventThrottleTimer = null;
+    interactionEvents.forEach(evt => {
+      window.addEventListener(evt, () => {
+        if (!eventThrottleTimer) {
+          eventThrottleTimer = setTimeout(() => {
+            eventThrottleTimer = null;
+            if (!isWarningShown) {
+              lastActivityTime = Date.now();
+            }
+          }, 1000);
+        }
+      }, { passive: true });
+    });
+
+    // Stay Signed In button
+    const stayBtn = document.getElementById('btnStaySignedIn');
+    if (stayBtn) {
+      stayBtn.addEventListener('click', () => {
+        resetActivity(true);
+      });
+    }
+
+    // Main ticker: checks every 2 seconds
+    setInterval(() => {
+      const elapsed = Date.now() - lastActivityTime;
+      if (elapsed >= INACTIVITY_LIMIT_MS) {
+        hideWarning();
+        window.location.href = '/login/' + userRole + '?reason=inactivity';
+      } else if (elapsed >= WARNING_TRIGGER_MS && !isWarningShown) {
+        showWarning();
+      }
+    }, 2000);
+  })();
+  </script>
+  <% } %>
+
+  <script>
+  // Anti-Bfcache guard: Force reload if navigated via browser Back/Forward cache
+  window.addEventListener('pageshow', function (event) {
+    if (event.persisted || (window.performance && window.performance.getEntriesByType && window.performance.getEntriesByType('navigation')[0] && window.performance.getEntriesByType('navigation')[0].type === 'back_forward')) {
+      window.location.reload();
+    }
+  });
+  </script>
+
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="/js/main.js"></script>

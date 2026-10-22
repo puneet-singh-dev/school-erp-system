@@ -2,6 +2,50 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const db = require('../config/db');
+const { clearSessionCookies } = require('../middleware/auth');
+
+/**
+ * Returns structured notice object for session expiration or logout reason
+ */
+function getReasonNotice(reason, role) {
+  if (!reason) return null;
+  const inactMins = parseInt(process.env.SESSION_INACTIVITY_TIMEOUT_MINUTES, 10) || 15;
+  const adminHours = parseFloat(process.env.SESSION_ABSOLUTE_TIMEOUT_ADMIN_HOURS) || 8;
+  const otherHours = parseFloat(process.env.SESSION_ABSOLUTE_TIMEOUT_TEACHER_HOURS) || 12;
+
+  if (reason === 'inactivity') {
+    return {
+      type: 'warning',
+      title: 'Session Expired',
+      message: `Your session has expired due to ${inactMins} minutes of inactivity. Please log in again to continue.`
+    };
+  }
+  if (reason === 'absolute') {
+    const hours = (role === 'admin') ? adminHours : otherHours;
+    return {
+      type: 'warning',
+      title: 'Session Lifetime Expired',
+      message: (role === 'admin')
+        ? `Your administrator session has reached its ${hours}-hour maximum lifetime limit. Please log in again for security.`
+        : `Your session has reached its maximum allowable duration (${hours} hours). Please log in again to continue.`
+    };
+  }
+  if (reason === 'logout') {
+    return {
+      type: 'success',
+      title: 'Signed Out',
+      message: 'You have been successfully logged out.'
+    };
+  }
+  if (reason === 'expired') {
+    return {
+      type: 'warning',
+      title: 'Session Expired',
+      message: 'Your session has expired. Please log in again to continue.'
+    };
+  }
+  return null;
+}
 
 // Helper function for login logic
 async function handleLogin(req, res, expectedRole = null) {
@@ -198,22 +242,33 @@ async function handleLogin(req, res, expectedRole = null) {
       return res.redirect(redirectUrl);
     }
 
-    // Session establishment
-    req.session.user = {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      photo: user.profile_photo
-    };
-
-    req.session.save((err) => {
-      if (err) {
-        console.error('Session save error:', err);
-        req.flash('error_msg', 'Session error. Please try again.');
+    // Regenerate session ID upon successful login to prevent session fixation attacks
+    req.session.regenerate((regenErr) => {
+      if (regenErr) {
+        console.error('Session regeneration error:', regenErr);
+        req.flash('error_msg', 'Unable to initiate a secure session. Please try again.');
         return res.redirect(redirectUrl);
       }
-      res.redirect(`/${user.role}`);
+
+      const now = Date.now();
+      req.session.user = {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        photo: user.profile_photo
+      };
+      req.session.createdAt = now;
+      req.session.lastActivity = now;
+
+      req.session.save((saveErr) => {
+        if (saveErr) {
+          console.error('Session save error:', saveErr);
+          req.flash('error_msg', 'Session error. Please try again.');
+          return res.redirect(redirectUrl);
+        }
+        res.redirect(`/${user.role}`);
+      });
     });
   } catch (err) {
     console.error('Login error:', err);
@@ -225,21 +280,28 @@ async function handleLogin(req, res, expectedRole = null) {
 // GET /login
 router.get('/login', (req, res) => {
   if (req.query.clear) {
+    clearSessionCookies(res);
     return req.session.destroy(() => {
       res.render('auth/login', {
         layout: 'layouts/auth',
         title: 'Login - School ERP',
-        activeRole: req.query.role || 'student'
+        activeRole: req.query.role || 'student',
+        sessionNotice: null
       });
     });
   }
-  if (req.session.user) {
+  if (req.session && req.session.user) {
     return res.redirect(`/${req.session.user.role}`);
   }
+
+  const activeRole = req.query.role || 'student';
+  const sessionNotice = getReasonNotice(req.query.reason, activeRole);
+
   res.render('auth/login', {
     layout: 'layouts/auth',
     title: 'Login - School ERP',
-    activeRole: req.query.role || 'student'
+    activeRole,
+    sessionNotice
   });
 });
 
@@ -250,7 +312,7 @@ router.get('/login/:role', (req, res) => {
   if (!validRoles.includes(role)) {
     return res.redirect('/login');
   }
-  if (req.session.user) {
+  if (req.session && req.session.user) {
     return res.redirect(`/${req.session.user.role}`);
   }
 
@@ -260,10 +322,13 @@ router.get('/login/:role', (req, res) => {
     student: 'Student Login - School ERP'
   };
 
+  const sessionNotice = getReasonNotice(req.query.reason, role);
+
   res.render('auth/login', {
     layout: 'layouts/auth',
     title: roleTitles[role] || 'Login - School ERP',
-    activeRole: role
+    activeRole: role,
+    sessionNotice
   });
 });
 
@@ -382,12 +447,48 @@ router.get('/gallery', async (req, res) => {
   }
 });
 
-// Logout
-router.post('/logout', (req, res) => {
-  req.session.destroy(() => res.redirect('/login'));
+// ==================== SESSION KEEPALIVE & STATUS API ====================
+router.get('/api/session-ping', (req, res) => {
+  if (!req.session || !req.session.user) {
+    return res.status(401).json({
+      authenticated: false,
+      expired: true,
+      message: 'No active session found.'
+    });
+  }
+
+  // checkSessionExpiry has already refreshed req.session.lastActivity
+  res.json({
+    authenticated: true,
+    user: {
+      id: req.session.user.id,
+      name: req.session.user.name,
+      role: req.session.user.role
+    },
+    lastActivity: req.session.lastActivity,
+    createdAt: req.session.createdAt
+  });
 });
-router.get('/logout', (req, res) => {
-  req.session.destroy(() => res.redirect('/login'));
-});
+
+// ==================== LOGOUT ====================
+function handleLogout(req, res) {
+  const role = req.session && req.session.user ? req.session.user.role : null;
+  const redirectTarget = role ? `/login/${role}?reason=logout` : '/login?reason=logout';
+
+  // Explicitly clear browser session cookies
+  clearSessionCookies(res);
+
+  if (req.session) {
+    req.session.destroy((err) => {
+      if (err) console.error('Logout session destruction error:', err);
+      res.redirect(redirectTarget);
+    });
+  } else {
+    res.redirect(redirectTarget);
+  }
+}
+
+router.post('/logout', handleLogout);
+router.get('/logout', handleLogout);
 
 module.exports = router;

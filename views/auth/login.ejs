@@ -20,6 +20,29 @@
       </button>
     </div>
 
+    <!-- Session Notice / Expiration Alert -->
+    <% if (typeof sessionNotice !== 'undefined' && sessionNotice) { %>
+      <% if (sessionNotice.type === 'warning') { %>
+      <div class="alert alert-warning alert-dismissible fade show d-flex align-items-start py-2 px-3 mb-3 shadow-sm border-warning" role="alert" style="background:#fffbeb;border-left:4px solid #f59e0b;">
+        <i class="fa-solid fa-clock-rotate-left fa-lg me-2 mt-1 text-warning"></i>
+        <div class="flex-grow-1">
+          <div class="fw-bold small text-dark"><%- sessionNotice.title %></div>
+          <div class="small text-secondary"><%- sessionNotice.message %></div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+      <% } else if (sessionNotice.type === 'success') { %>
+      <div class="alert alert-success alert-dismissible fade show d-flex align-items-start py-2 px-3 mb-3 shadow-sm" role="alert" style="background:#f0fdf4;border-left:4px solid #10b981;">
+        <i class="fa-solid fa-circle-check fa-lg me-2 mt-1 text-success"></i>
+        <div class="flex-grow-1">
+          <div class="fw-bold small text-dark"><%- sessionNotice.title %></div>
+          <div class="small text-secondary"><%- sessionNotice.message %></div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+      <% } %>
+    <% } %>
+
     <!-- Flash Messages -->
     <% if(success_msg && success_msg.length > 0) { %>
     <div class="alert alert-success alert-dismissible fade show d-flex align-items-center py-2 px-3 mb-3" role="alert">

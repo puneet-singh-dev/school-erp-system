@@ -6,6 +6,8 @@ const path = require('path');
 const expressLayouts = require('express-ejs-layouts');
 require('dotenv').config();
 
+const { checkSessionExpiry, setNoCacheHeaders } = require('./middleware/auth');
+
 const app = express();
 
 // EJS + layouts
@@ -25,26 +27,37 @@ app.use(express.json());
 // Method override
 app.use(methodOverride('_method'));
 
-// Session
+// Session Security Configuration
+const SESSION_NAME = process.env.SESSION_NAME || 'schoolerp.sid';
+const maxCookieHours = parseFloat(process.env.SESSION_ABSOLUTE_TIMEOUT_TEACHER_HOURS) || 12;
+
 app.use(session({
+  name: SESSION_NAME,
   secret: process.env.SESSION_SECRET || 'schoolerp_secret',
-  resave: true,
+  resave: false,
   saveUninitialized: false,
   cookie: {
-    maxAge: 1000 * 60 * 60 * 24, // 1 day
-    httpOnly: true
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: maxCookieHours * 60 * 60 * 1000
   }
 }));
 
 // Flash
 app.use(flash());
 
+// Global Server-Side Session Expiry Check (Inactivity & Absolute Limits)
+app.use(checkSessionExpiry);
+
 // Global locals
 app.use((req, res, next) => {
-  res.locals.user = req.session.user || null;
+  res.locals.user = req.session ? (req.session.user || null) : null;
   res.locals.success_msg = req.flash('success_msg');
   res.locals.error_msg = req.flash('error_msg');
   res.locals.error = req.flash('error');
+  res.locals.sessionTimeoutMinutes = parseInt(process.env.SESSION_INACTIVITY_TIMEOUT_MINUTES, 10) || 15;
+
   // School branding — available in all views
   res.locals.schoolName = (process.env.SCHOOL_NAME && process.env.SCHOOL_NAME !== 'School ERP')
     ? process.env.SCHOOL_NAME
@@ -57,9 +70,9 @@ app.use((req, res, next) => {
 
 // Routes
 app.use('/', require('./routes/auth'));
-app.use('/admin', require('./routes/admin'));
-app.use('/teacher', require('./routes/teacher'));
-app.use('/student', require('./routes/student'));
+app.use('/admin', setNoCacheHeaders, require('./routes/admin'));
+app.use('/teacher', setNoCacheHeaders, require('./routes/teacher'));
+app.use('/student', setNoCacheHeaders, require('./routes/student'));
 
 // 404
 app.use((req, res) => {
