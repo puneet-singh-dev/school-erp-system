@@ -351,9 +351,18 @@ router.post('/students/add', upload.single('profile_photo'), async (req, res) =>
     const profilePhoto = req.file ? req.file.filename : 'default.png';
     const studentDefaultPassword = (password && password.trim()) || (phone && phone.trim()) || (emergency_contact && emergency_contact.trim()) || 'student123';
     const hashed = await bcrypt.hash(studentDefaultPassword, 10);
+    let photoData = null;
+    let photoMime = null;
+    if (req.file) {
+      try {
+        photoData = fs.readFileSync(req.file.path).toString('base64');
+        photoMime = req.file.mimetype || 'image/jpeg';
+      } catch (err) {}
+    }
+
     const [userResult] = await db.query(
-      'INSERT INTO users (name,email,password,role,phone,address,profile_photo) VALUES (?,?,?,?,?,?,?)',
-      [name, email, hashed, 'student', phone || null, address || null, profilePhoto]
+      'INSERT INTO users (name,email,password,role,phone,address,profile_photo,photo_data,photo_mime) VALUES (?,?,?,?,?,?,?,?,?)',
+      [name, email, hashed, 'student', phone || null, address || null, profilePhoto, photoData, photoMime]
     );
 
     const cleanUsesTransport = (uses_transport === '1' || uses_transport === 1 || uses_transport === true) ? 1 : 0;
@@ -415,8 +424,13 @@ router.post('/students/edit/:id', upload.single('profile_photo'), async (req, re
 
     const userId = students[0].user_id;
     if (req.file) {
-      await db.query('UPDATE users SET name=?,email=?,phone=?,address=?,profile_photo=? WHERE id=?',
-        [name, email, phone, address, req.file.filename, userId]);
+      let photoData = null;
+      let photoMime = req.file.mimetype || 'image/jpeg';
+      try {
+        photoData = fs.readFileSync(req.file.path).toString('base64');
+      } catch (err) {}
+      await db.query('UPDATE users SET name=?,email=?,phone=?,address=?,profile_photo=?,photo_data=?,photo_mime=? WHERE id=?',
+        [name, email, phone, address, req.file.filename, photoData, photoMime, userId]);
     } else {
       await db.query('UPDATE users SET name=?,email=?,phone=?,address=? WHERE id=?',
         [name, email, phone, address, userId]);
@@ -1639,9 +1653,18 @@ router.post('/gallery/upload', (req, res, next) => {
         ? title.trim()
         : (title && title.trim() ? `${title.trim()} (${count + 1})` : parsedBase);
 
+      let base64Data = null;
+      let mimeType = f.mimetype || 'image/jpeg';
+      try {
+        const fileBuffer = fs.readFileSync(f.path);
+        base64Data = fileBuffer.toString('base64');
+      } catch (readErr) {
+        console.error('Error reading uploaded image buffer:', readErr);
+      }
+
       await db.query(
-        `INSERT INTO gallery (title, description, category, image_path, uploaded_by) VALUES (?, ?, ?, ?, ?)`,
-        [finalTitle, description || '', finalCategory, f.filename, adminId]
+        `INSERT INTO gallery (title, description, category, image_path, uploaded_by, image_data, mime_type) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [finalTitle, description || '', finalCategory, f.filename, adminId, base64Data, mimeType]
       );
       count++;
     }

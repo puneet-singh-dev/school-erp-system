@@ -342,6 +342,48 @@ async function ensureSchema() {
       )
     `);
 
+    // Ensure gallery table has image_data and mime_type for persistent storage across cloud redeployments
+    const galleryColumns = [
+      { name: 'image_data', def: 'LONGTEXT NULL' },
+      { name: 'mime_type', def: 'VARCHAR(50) NULL' }
+    ];
+    for (const col of galleryColumns) {
+      try {
+        const [exists] = await pool.query(
+          `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'gallery' AND COLUMN_NAME = ?`,
+          [col.name]
+        );
+        if (exists.length === 0) {
+          await pool.query(`ALTER TABLE gallery ADD COLUMN ${col.name} ${col.def}`);
+        }
+      } catch (gErr) {
+        try {
+          await pool.query(`ALTER TABLE gallery ADD COLUMN ${col.name} ${col.def}`);
+        } catch (ignore) {}
+      }
+    }
+
+    // Ensure users table has photo_data and photo_mime for student/user profile photos
+    const userPhotoColumns = [
+      { name: 'photo_data', def: 'LONGTEXT NULL' },
+      { name: 'photo_mime', def: 'VARCHAR(50) NULL' }
+    ];
+    for (const col of userPhotoColumns) {
+      try {
+        const [exists] = await pool.query(
+          `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = ?`,
+          [col.name]
+        );
+        if (exists.length === 0) {
+          await pool.query(`ALTER TABLE users ADD COLUMN ${col.name} ${col.def}`);
+        }
+      } catch (pErr) {
+        try {
+          await pool.query(`ALTER TABLE users ADD COLUMN ${col.name} ${col.def}`);
+        } catch (ignore) {}
+      }
+    }
+
     // 2. Homework Table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS homework (

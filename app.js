@@ -3,9 +3,11 @@ const session = require('express-session');
 const flash = require('connect-flash');
 const methodOverride = require('method-override');
 const path = require('path');
+const fs = require('fs');
 const expressLayouts = require('express-ejs-layouts');
 require('dotenv').config();
 
+const db = require('./config/db');
 const { checkSessionExpiry, setNoCacheHeaders } = require('./middleware/auth');
 
 const app = express();
@@ -21,6 +23,63 @@ app.set('layout', 'layouts/main');
 
 // Static files
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Self-Healing Image Restoration Middleware
+// Ensures uploaded gallery photos and student photos persist permanently across cloud container redeployments
+app.get('/uploads/gallery/:filename', async (req, res, next) => {
+  const filename = req.params.filename;
+  const filePath = path.join(__dirname, 'public/uploads/gallery', filename);
+
+  if (fs.existsSync(filePath)) {
+    return next();
+  }
+
+  try {
+    const [rows] = await db.query('SELECT image_data, mime_type FROM gallery WHERE image_path = ?', [filename]);
+    if (rows.length && rows[0].image_data) {
+      const buffer = Buffer.from(rows[0].image_data, 'base64');
+      try {
+        const dir = path.dirname(filePath);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(filePath, buffer);
+      } catch (wErr) {}
+      res.setHeader('Content-Type', rows[0].mime_type || 'image/jpeg');
+      res.setHeader('Cache-Control', 'public, max-age=604800');
+      return res.end(buffer);
+    }
+  } catch (err) {
+    console.error('Self-healing gallery image error:', err.message);
+  }
+  next();
+});
+
+app.get('/uploads/students/:filename', async (req, res, next) => {
+  const filename = req.params.filename;
+  const filePath = path.join(__dirname, 'public/uploads/students', filename);
+
+  if (fs.existsSync(filePath)) {
+    return next();
+  }
+
+  try {
+    const [rows] = await db.query('SELECT photo_data, photo_mime FROM users WHERE profile_photo = ?', [filename]);
+    if (rows.length && rows[0].photo_data) {
+      const buffer = Buffer.from(rows[0].photo_data, 'base64');
+      try {
+        const dir = path.dirname(filePath);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(filePath, buffer);
+      } catch (wErr) {}
+      res.setHeader('Content-Type', rows[0].photo_mime || 'image/jpeg');
+      res.setHeader('Cache-Control', 'public, max-age=604800');
+      return res.end(buffer);
+    }
+  } catch (err) {
+    console.error('Self-healing student photo error:', err.message);
+  }
+  next();
+});
+
 app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 
 // Body parser
