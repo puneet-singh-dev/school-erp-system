@@ -10,6 +10,9 @@ const { checkSessionExpiry, setNoCacheHeaders } = require('./middleware/auth');
 
 const app = express();
 
+// Trust reverse proxy (Render.com, AWS, Nginx) so HTTPS and cookies work properly in production
+app.set('trust proxy', 1);
+
 // EJS + layouts
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
@@ -38,7 +41,7 @@ app.use(session({
   saveUninitialized: false,
   cookie: {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: 'auto',
     sameSite: 'lax',
     maxAge: maxCookieHours * 60 * 60 * 1000
   }

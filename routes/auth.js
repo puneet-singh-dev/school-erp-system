@@ -144,7 +144,7 @@ async function handleLogin(req, res, expectedRole = null) {
     } else {
       // General or Admin
       // 1. Try finding by email
-      const [emailRows] = await db.query('SELECT * FROM users WHERE email = ? AND is_active = 1', [identifier]);
+      const [emailRows] = await db.query('SELECT * FROM users WHERE (email = ? OR (role = "admin" AND (LOWER(?) = "admin" OR LOWER(name) = LOWER(?)))) AND is_active = 1', [identifier, identifier, identifier]);
       if (emailRows.length) rows = emailRows;
 
       // 2. Try finding student by admission_no
