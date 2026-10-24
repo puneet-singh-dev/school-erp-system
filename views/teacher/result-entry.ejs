@@ -1,33 +1,106 @@
-<div class="d-flex justify-content-between mb-3"><h5 class="fw-bold mb-0">Enter Results: <%- exam.name %></h5><a href="/teacher/results" class="btn btn-sm btn-outline-secondary">Back</a></div>
-<div class="alert alert-info"><strong>Class:</strong> <%- exam.class_name %> | <strong>Exam:</strong> <%- exam.name %></div>
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h5 class="fw-bold mb-0">Enter Results: <%- exam.name %></h5>
+    <span class="text-muted small">Passing Criteria: <strong>Minimum 33%</strong> in each subject</span>
+  </div>
+  <a href="/teacher/results" class="btn btn-sm btn-outline-secondary">Back</a>
+</div>
+
+<div class="alert alert-info py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
+  <div>
+    <strong>Class:</strong> <%- exam.class_name %> &nbsp;|&nbsp;
+    <strong>Exam:</strong> <%- exam.name %>
+  </div>
+  <span class="badge bg-warning text-dark"><i class="fa-solid fa-circle-exclamation me-1"></i>Min Passing: 33% of Max Marks</span>
+</div>
+
 <form action="/teacher/results/save/<%- exam.id %>" method="POST">
-  <div class="card shadow-sm">
+  <div class="card shadow-sm border-0">
     <div class="card-body p-0">
       <div class="table-responsive">
-        <table class="table table-bordered align-middle mb-0">
+        <table class="table table-bordered align-middle mb-0 text-center" style="font-size: 0.88rem;">
           <thead class="table-dark">
             <tr>
-              <th>Student</th>
-              <% subjects.forEach(sub => { %><th><%- sub.name %><br><small>Max: <%- sub.max_marks %></small></th><% }) %>
+              <th style="min-width: 150px;" class="text-start">Student Name</th>
+              <% subjects.forEach(sub => { %>
+              <th style="min-width: 120px;">
+                <div><%- sub.name %></div>
+                <small class="text-warning fw-normal" style="font-size: 0.72rem;">Max: <%- sub.max_marks %> &bull; Pass: <%- Math.ceil(sub.max_marks * 0.33) %></small>
+              </th>
+              <% }) %>
+              <th style="width: 100px;">Report Card</th>
             </tr>
           </thead>
           <tbody>
             <% students.forEach(s => { %>
             <tr>
-              <td><strong><%- s.name %></strong><br><small>Roll: <%- s.roll_number||'-' %></small></td>
+              <td class="text-start">
+                <div class="fw-semibold"><%- s.name %></div>
+                <small class="text-muted">Roll: <%- s.roll_number || '-' %></small>
+              </td>
               <% subjects.forEach(sub => { %>
-              <% const r = resultsMap[`${s.id}_${sub.id}`]; %>
+              <% 
+                const r = resultsMap[`${s.id}_${sub.id}`]; 
+                const marksVal = r ? r.marks_obtained : '';
+                const isFail = marksVal !== '' && (parseFloat(marksVal) / sub.max_marks) < 0.33;
+              %>
               <td>
-                <input type="number" name="marks[<%- s.id %>_<%- sub.id %>]" class="form-control form-control-sm text-center" value="<%- r?r.marks_obtained:'' %>" min="0" max="<%- sub.max_marks %>" step="0.5">
-                <% if(r) { %><small class="text-success"><%- r.grade %></small><% } %>
+                <input type="number" name="marks[<%- s.id %>_<%- sub.id %>]" 
+                  class="form-control form-control-sm text-center <%- isFail ? 'border-danger text-danger bg-danger-subtle' : '' %>" 
+                  value="<%- marksVal %>" 
+                  min="0" max="<%- sub.max_marks %>" step="0.5"
+                  data-max="<%- sub.max_marks %>"
+                  placeholder="0-<%- sub.max_marks %>"
+                  oninput="validateMarksInput(this)">
+                <div class="mt-1 grade-tag">
+                  <% if(r) { %>
+                    <small class="badge <%- isFail ? 'bg-danger' : 'bg-success' %>" style="font-size: 0.7rem;">
+                      <%- isFail ? 'Fail (<33%)' : r.grade %>
+                    </small>
+                  <% } %>
+                </div>
               </td>
               <% }) %>
+              <td>
+                <a href="/teacher/results/report-card/<%- s.id %>/<%- exam.id %>" target="_blank" class="btn btn-sm btn-outline-primary" title="Print Report Card">
+                  <i class="fa-solid fa-file-pdf"></i>
+                </a>
+              </td>
             </tr>
             <% }) %>
           </tbody>
         </table>
       </div>
     </div>
-    <div class="card-footer"><button type="submit" class="btn btn-primary px-4"><i class="fa-solid fa-save me-1"></i>Save Results</button></div>
+    <div class="card-footer d-flex justify-content-between align-items-center">
+      <span class="text-muted small">Scores &lt; 33% are marked as Fail.</span>
+      <button type="submit" class="btn btn-primary px-4 fw-semibold"><i class="fa-solid fa-save me-1"></i>Save Results</button>
+    </div>
   </div>
 </form>
+
+<script>
+function validateMarksInput(input) {
+  const max = parseFloat(input.getAttribute('data-max')) || 100;
+  const val = parseFloat(input.value);
+  const tagDiv = input.parentElement.querySelector('.grade-tag');
+  
+  if (isNaN(val) || input.value === '') {
+    input.classList.remove('border-danger', 'text-danger', 'bg-danger-subtle', 'border-success');
+    if (tagDiv) tagDiv.innerHTML = '';
+    return;
+  }
+  
+  const pct = (val / max) * 100;
+  if (pct < 33) {
+    input.classList.add('border-danger', 'text-danger', 'bg-danger-subtle');
+    input.classList.remove('border-success');
+    if (tagDiv) tagDiv.innerHTML = '<small class="badge bg-danger" style="font-size: 0.7rem;">Fail (<33%)</small>';
+  } else {
+    input.classList.remove('border-danger', 'text-danger', 'bg-danger-subtle');
+    input.classList.add('border-success');
+    const gr = pct >= 90 ? 'A+' : pct >= 80 ? 'A' : pct >= 70 ? 'B' : pct >= 60 ? 'C' : pct >= 50 ? 'D' : 'E';
+    if (tagDiv) tagDiv.innerHTML = '<small class="badge bg-success" style="font-size: 0.7rem;">Grade: ' + gr + '</small>';
+  }
+}
+</script>

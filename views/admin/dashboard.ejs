@@ -16,7 +16,10 @@
         </p>
       </div>
     </div>
-    <div>
+    <div class="d-flex align-items-center gap-2">
+      <a href="/admin/backup/download" class="btn btn-outline-dark btn-sm shadow-sm px-3 py-2 fw-semibold" title="Download complete database backup">
+        <i class="fa-solid fa-cloud-arrow-down me-1"></i>Database Backup
+      </a>
       <form action="/admin/demo/clear" method="POST" onsubmit="return confirm('Are you sure you want to delete and exit all demo students and teachers? All real data will be preserved intact.');" class="m-0">
         <button type="submit" class="btn btn-danger btn-sm shadow-sm px-3 py-2 fw-semibold">
           <i class="fa-solid fa-trash-can me-1"></i>Delete / Exit Demo
@@ -26,8 +29,11 @@
   </div>
 </div>
 <% } else { %>
-<!-- Quick Generator option when no demo data exists -->
-<div class="d-flex justify-content-end mb-3">
+<!-- Quick Generator & Backup bar -->
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <a href="/admin/backup/download" class="btn btn-outline-success btn-sm shadow-sm fw-semibold">
+    <i class="fa-solid fa-database me-1"></i>Download Database Backup (.sql)
+  </a>
   <form action="/admin/demo/generate" method="POST" class="m-0">
     <button type="submit" class="btn btn-outline-primary btn-sm shadow-sm">
       <i class="fa-solid fa-flask-vial me-1"></i>Load Demo Data (10-15 students/class & teachers)

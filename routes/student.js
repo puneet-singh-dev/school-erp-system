@@ -4,6 +4,7 @@ const db = require('../config/db');
 const { isAuthenticated } = require('../middleware/auth');
 const moment = require('moment');
 const { generateFeeReceiptPDF } = require('../utils/receiptPdf');
+const { getPendingFeeReport } = require('../utils/feeReport');
 
 router.use(isAuthenticated);
 router.use((req, res, next) => {
@@ -50,13 +51,30 @@ router.get('/', async (req, res) => {
       WHERE student_id=? AND MONTH(date)=MONTH(CURDATE()) AND YEAR(date)=YEAR(CURDATE())
     `, [student.id]);
 
-    // Fee summary
-    const [[fees]] = await db.query(`
-      SELECT COALESCE(SUM(fs.amount),0) as total_fees, COALESCE(SUM(fp.amount_paid),0) as paid
-      FROM fee_structure fs
-      LEFT JOIN fee_payments fp ON fs.id=fp.fee_structure_id AND fp.student_id=?
-      WHERE fs.class_id=?
-    `, [student.id, student.class_id]);
+    // Accurate month-by-month fee summary
+    let feeData = {
+      total_fees: 0,
+      paid: 0,
+      balance: 0,
+      pending_months_count: 0,
+      pending_months_text: 'None',
+      paid_months: 'None',
+      monthly_rate: 0,
+      monthly_tuition: 0,
+      monthly_van: 0,
+      previous_balance: parseFloat(student.previous_balance || 0),
+      session_due: 0
+    };
+    let feeReport = null;
+
+    try {
+      feeReport = await getPendingFeeReport({ student_id: student.id, includeCleared: true });
+      if (feeReport.students.length) {
+        feeData = feeReport.students[0];
+      }
+    } catch (fErr) {
+      console.error('Student dashboard fee calculation error:', fErr.message);
+    }
 
     // Active homework assignments count
     const [[{ homeworkCount }]] = await db.query(`
@@ -77,7 +95,9 @@ router.get('/', async (req, res) => {
       title: 'Student Dashboard',
       student,
       attendance,
-      fees,
+      fees: { total_fees: feeData.total_fees, paid: feeData.paid },
+      feeData,
+      feeReport,
       homeworkCount,
       notices,
       upcomingEvents
@@ -158,25 +178,44 @@ router.get('/fees', async (req, res) => {
       ORDER BY fp.payment_date DESC, fp.id DESC
     `, [student.id]);
 
-    const [[summary]] = await db.query(`
-      SELECT COALESCE(SUM(fs.amount),0) as total_fees, COALESCE(SUM(fp.amount_paid),0) as paid
-      FROM fee_structure fs
-      LEFT JOIN fee_payments fp ON fs.id=fp.fee_structure_id AND fp.student_id=?
-      WHERE fs.class_id=?
-    `, [student.id, student.class_id]);
+    const feeReport = await getPendingFeeReport({ student_id: student.id, includeCleared: true });
+    const feeData = feeReport.students.length ? feeReport.students[0] : {
+      total_fees: 0,
+      paid: 0,
+      balance: 0,
+      pending_months_count: 0,
+      pending_months_text: 'None',
+      paid_months: 'None',
+      monthly_rate: 0,
+      monthly_tuition: 0,
+      monthly_van: 0,
+      previous_balance: parseFloat(student.previous_balance || 0),
+      session_due: 0,
+      is_cleared: true
+    };
 
-    const prevBal = parseFloat(student.previous_balance || 0);
-    if (summary) {
-      summary.previous_balance = prevBal;
-      summary.total_fees = parseFloat(summary.total_fees || 0) + prevBal;
-    }
+    // Calculate total paid across all payments
+    let allPaidSum = 0;
+    payments.forEach(p => {
+      allPaidSum += parseFloat(p.amount_paid) || 0;
+    });
+
+    const summary = {
+      total_fees: feeData.total_fees,
+      paid: allPaidSum,
+      balance: feeData.balance,
+      previous_balance: feeData.previous_balance,
+      previous_balance_remarks: feeData.previous_balance_remarks
+    };
 
     res.render('student/fees', {
       title: 'My Fees & Receipts',
       student,
       feeStructures,
       payments,
-      summary
+      summary,
+      feeData,
+      feeReport
     });
   } catch (err) {
     console.error('Fees error:', err);

@@ -208,7 +208,7 @@ async function generateDemoData(adminUserId = 1) {
           ];
           if (p.van && p.fee > 0) {
             breakdown.push({
-              name: `Van Fee [${p.route}] (${paidMonths.join(', ')})`,
+              name: `School Van / Transport Fee (${paidMonths.join(', ')})`,
               amount: p.fee * totalMonthsCount
             });
           }

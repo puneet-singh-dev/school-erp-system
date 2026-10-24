@@ -47,11 +47,13 @@
     </div>
   </div>
   <div class="col-xl-3 col-sm-6">
-    <div class="stat-card bg-warning text-dark">
+    <div class="stat-card <%- (typeof feeData !== 'undefined' && feeData.balance > 0) ? 'bg-danger text-white' : 'bg-success text-white' %>">
       <div class="stat-icon"><i class="fa-solid fa-indian-rupee-sign"></i></div>
       <div>
-        <div class="stat-num">₹<%- fees ? parseFloat(Math.max(0, fees.total_fees - fees.paid)).toLocaleString('en-IN') : '0' %></div>
-        <div class="stat-label">Pending Fee Balance</div>
+        <div class="stat-num">₹<%- (typeof feeData !== 'undefined') ? parseFloat(feeData.balance).toLocaleString('en-IN') : (fees ? parseFloat(Math.max(0, fees.total_fees - fees.paid)).toLocaleString('en-IN') : '0') %></div>
+        <div class="stat-label">
+          <%- (typeof feeData !== 'undefined' && feeData.balance > 0) ? 'Fee Due (' + feeData.pending_months_count + ' Mo: ' + feeData.pending_months_text + ')' : 'Fee Balance (Cleared)' %>
+        </div>
       </div>
     </div>
   </div>

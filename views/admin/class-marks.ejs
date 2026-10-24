@@ -54,6 +54,31 @@
 </div>
 
 <% if(selectedClass && selectedExam) { %>
+<!-- Top 3 Rank Holders Podium Banner -->
+<% if(topThree && topThree.length > 0) { %>
+<div class="row g-3 mb-4 d-print-none">
+  <% topThree.forEach(top => { %>
+  <div class="col-md-4">
+    <div class="card border-0 shadow-sm h-100 <%- top.rank === 1 ? 'bg-warning-subtle border-start border-warning border-4' : (top.rank === 2 ? 'bg-light border-start border-secondary border-4' : 'bg-danger-subtle border-start border-danger border-4') %>">
+      <div class="card-body p-3 d-flex align-items-center">
+        <div class="fs-1 me-3">
+          <%- top.rank === 1 ? '🥇' : (top.rank === 2 ? '🥈' : '🥉') %>
+        </div>
+        <div>
+          <span class="badge <%- top.rank === 1 ? 'bg-warning text-dark' : (top.rank === 2 ? 'bg-secondary text-white' : 'bg-danger text-white') %> fw-bold">
+            <%- top.rankText %>
+          </span>
+          <h6 class="fw-bold mb-0 mt-1 text-dark"><%- top.name %></h6>
+          <div class="text-muted small">Adm No: <strong><%- top.admission_no %></strong> | Roll: <strong><%- top.roll_number || '-' %></strong></div>
+          <div class="fw-bold text-success small mt-1"><i class="fa-solid fa-chart-line me-1"></i>Percentage: <%- top.percentage %>% (Passed)</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <% }) %>
+</div>
+<% } %>
+
 <!-- Printable Broadsheet / Tabulation Sheet -->
 <div class="card shadow-sm border-0 print-sheet">
   <div class="card-body p-4">
@@ -84,18 +109,19 @@
           <tr>
             <th style="width: 45px;">Roll</th>
             <th style="width: 85px;">Adm No</th>
-            <th class="text-start" style="min-width: 150px;">Student Name</th>
+            <th class="text-start" style="min-width: 140px;">Student Name</th>
             <% subjects.forEach(sub => { %>
             <th>
               <div><%- sub.name %></div>
-              <small class="text-warning fw-normal" style="font-size: 0.7rem;">(Max: <%- sub.max_marks %>)</small>
+              <small class="text-warning fw-normal" style="font-size: 0.7rem;">(Max: <%- sub.max_marks %> &bull; Pass: <%- Math.ceil(sub.max_marks * 0.33) %>)</small>
             </th>
             <% }) %>
             <th style="width: 65px;">Total</th>
             <th style="width: 55px;">%</th>
-            <th style="width: 55px;">Grade</th>
-            <th style="width: 65px;">Result</th>
-            <th class="d-print-none" style="width: 60px;">Card</th>
+            <th style="width: 50px;">Grade</th>
+            <th style="width: 60px;">Result</th>
+            <th style="width: 75px;">Position</th>
+            <th class="d-print-none" style="width: 85px;">Report Card</th>
           </tr>
         </thead>
         <tbody>
@@ -125,7 +151,7 @@
             %>
             <td>
               <% if(marks !== null) { %>
-                <span class="<%- (marks / sub.max_marks) * 100 < 33 ? 'text-danger fw-bold' : '' %>">
+                <span class="<%- (marks / sub.max_marks) * 100 < 33 ? 'text-danger fw-bold bg-danger-subtle px-1 rounded' : '' %>">
                   <%- marks.toFixed(1) %>
                 </span>
               <% } else { %>
@@ -136,8 +162,9 @@
 
             <% 
               const pct = totalMax > 0 ? (totalObt / totalMax * 100).toFixed(1) : 0;
-              const grade = pct >= 90 ? 'A+' : pct >= 80 ? 'A' : pct >= 70 ? 'B' : pct >= 60 ? 'C' : pct >= 50 ? 'D' : 'F';
+              const grade = pct >= 90 ? 'A+' : pct >= 80 ? 'A' : pct >= 70 ? 'B' : pct >= 60 ? 'C' : pct >= 50 ? 'D' : (pct >= 33 ? 'E' : 'F');
               if(pct >= 33 && isPass) passCount++; else failCount++;
+              const rk = ranksMap ? ranksMap[s.id] : null;
             %>
             <td class="fw-bold bg-light"><%- totalObt.toFixed(1) %> / <%- totalMax %></td>
             <td class="fw-bold"><%- pct %>%</td>
@@ -147,10 +174,26 @@
                 <%- isPass && pct >= 33 ? 'PASS' : 'FAIL' %>
               </span>
             </td>
+            <td>
+              <% if(rk && rk.isTopThree) { %>
+                <span class="badge <%- rk.rank === 1 ? 'bg-warning text-dark' : (rk.rank === 2 ? 'bg-secondary text-white' : 'bg-danger text-white') %> fw-bold">
+                  <%- rk.badgeText %>
+                </span>
+              <% } else if(rk && rk.rank) { %>
+                <span class="badge bg-light text-dark border"><%- rk.badgeText %></span>
+              <% } else { %>
+                <span class="text-muted">-</span>
+              <% } %>
+            </td>
             <td class="d-print-none">
-              <a href="/admin/results/report-card/<%- s.id %>/<%- selectedExam.id %>" target="_blank" class="btn btn-xs btn-outline-primary btn-sm" title="View Student Report Card">
-                <i class="fa-solid fa-file-invoice"></i>
-              </a>
+              <div class="btn-group btn-group-sm">
+                <a href="/admin/results/report-card/<%- s.id %>/<%- selectedExam.id %>" target="_blank" class="btn btn-outline-primary btn-sm" title="View Current Exam Report Card">
+                  <i class="fa-solid fa-file-invoice"></i>
+                </a>
+                <a href="/admin/results/report-card/<%- s.id %>/<%- selectedExam.id %>?consolidated=1" target="_blank" class="btn btn-outline-success btn-sm" title="View Annual Consolidated Report Card (1st, 2nd, 3rd Terms Side-by-Side)">
+                  <i class="fa-solid fa-layer-group"></i>
+                </a>
+              </div>
             </td>
           </tr>
           <% }) %>
@@ -161,12 +204,13 @@
     <!-- Summary Statistics and Signature Block -->
     <div class="row mt-4 pt-2">
       <div class="col-6">
-        <div class="p-2 bg-light rounded border small" style="max-width: 380px;">
-          <strong>Summary Statistics:</strong><br>
+        <div class="p-3 bg-light rounded border small" style="max-width: 440px;">
+          <strong class="text-primary"><i class="fa-solid fa-chart-pie me-1"></i>Class Performance Summary:</strong><br>
           Total Students: <strong><%- students.length %></strong> &bull;
           Passed: <strong class="text-success"><%- passCount %></strong> &bull;
-          Failed: <strong class="text-danger"><%- failCount %></strong> &bull;
-          Pass Percentage: <strong><%- students.length > 0 ? ((passCount / students.length) * 100).toFixed(1) : 0 %>%</strong>
+          Failed: <strong class="text-danger"><%- failCount %></strong><br>
+          Overall Pass Percentage: <strong class="text-primary"><%- students.length > 0 ? ((passCount / students.length) * 100).toFixed(1) : 0 %>%</strong><br>
+          <span class="text-muted" style="font-size: 0.75rem;">* Pass rule: Minimum 33% marks in each subject and aggregate percentage.</span>
         </div>
       </div>
       <div class="col-6 text-end">

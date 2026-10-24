@@ -5,7 +5,7 @@ const fs = require('fs');
 /**
  * Generates an A4 Landscape Tabulation Sheet / Class-wise Marks Broadsheet PDF
  */
-function generateClassMarksPDF(res, selectedClass, selectedExam, students, subjects, marksMap) {
+function generateClassMarksPDF(res, selectedClass, selectedExam, students, subjects, marksMap, classRanks = {}) {
   const doc = new PDFDocument({
     size: 'A4',
     layout: 'landscape',
@@ -49,15 +49,16 @@ function generateClassMarksPDF(res, selectedClass, selectedExam, students, subje
   // Table Configuration
   const startX = 25;
   let curY = 112;
-  const colRollW = 32;
-  const colAdmW = 60;
-  const colNameW = 120;
-  const colTotW = 55;
-  const colPctW = 42;
-  const colGrdW = 38;
-  const colResW = 48;
+  const colRollW = 30;
+  const colAdmW = 55;
+  const colNameW = 110;
+  const colTotW = 50;
+  const colPctW = 38;
+  const colGrdW = 35;
+  const colResW = 42;
+  const colRankW = 50;
 
-  const fixedWidths = colRollW + colAdmW + colNameW + colTotW + colPctW + colGrdW + colResW;
+  const fixedWidths = colRollW + colAdmW + colNameW + colTotW + colPctW + colGrdW + colResW + colRankW;
   const availableForSubs = 791 - fixedWidths;
   const subColW = subjects.length > 0 ? Math.floor(availableForSubs / subjects.length) : 60;
 
@@ -78,7 +79,8 @@ function generateClassMarksPDF(res, selectedClass, selectedExam, students, subje
   doc.text('Total', x, curY + 6, { width: colTotW, align: 'center' }); x += colTotW;
   doc.text('%', x, curY + 6, { width: colPctW, align: 'center' }); x += colPctW;
   doc.text('Grade', x, curY + 6, { width: colGrdW, align: 'center' }); x += colGrdW;
-  doc.text('Result', x, curY + 6, { width: colResW, align: 'center' });
+  doc.text('Result', x, curY + 6, { width: colResW, align: 'center' }); x += colResW;
+  doc.text('Position', x, curY + 6, { width: colRankW, align: 'center' });
 
   curY += 22;
 
@@ -125,14 +127,23 @@ function generateClassMarksPDF(res, selectedClass, selectedExam, students, subje
     });
 
     const pct = totalMax > 0 ? (totalObt / totalMax * 100).toFixed(1) : 0;
-    const grade = pct >= 90 ? 'A+' : pct >= 80 ? 'A' : pct >= 70 ? 'B' : pct >= 60 ? 'C' : pct >= 50 ? 'D' : 'F';
+    const grade = pct >= 90 ? 'A+' : pct >= 80 ? 'A' : pct >= 70 ? 'B' : pct >= 60 ? 'C' : pct >= 50 ? 'D' : (pct >= 33 ? 'E' : 'F');
     const status = isPass && pct >= 33 ? 'PASS' : 'FAIL';
     if (status === 'PASS') passCount++; else failCount++;
 
     doc.font('Helvetica-Bold').text(`${totalObt.toFixed(0)}/${totalMax}`, x, curY + 4, { width: colTotW, align: 'center' }); x += colTotW;
     doc.text(`${pct}%`, x, curY + 4, { width: colPctW, align: 'center' }); x += colPctW;
     doc.text(grade, x, curY + 4, { width: colGrdW, align: 'center' }); x += colGrdW;
-    doc.fillColor(status === 'PASS' ? '#22543d' : '#742a2a').text(status, x, curY + 4, { width: colResW, align: 'center' }).fillColor('#000');
+    doc.fillColor(status === 'PASS' ? '#22543d' : '#742a2a').text(status, x, curY + 4, { width: colResW, align: 'center' }).fillColor('#000'); x += colResW;
+
+    const rankInfo = classRanks[s.id];
+    const rankLabel = rankInfo && rankInfo.badgeText ? rankInfo.badgeText : '-';
+    if (rankInfo && rankInfo.isTopThree) {
+      const rankColor = rankInfo.rank === 1 ? '#b45309' : (rankInfo.rank === 2 ? '#475569' : '#92400e');
+      doc.fillColor(rankColor).font('Helvetica-Bold').text(rankLabel, x, curY + 4, { width: colRankW, align: 'center' }).fillColor('#000').font('Helvetica');
+    } else {
+      doc.text(rankLabel, x, curY + 4, { width: colRankW, align: 'center' });
+    }
 
     curY += rowH;
   });

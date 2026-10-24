@@ -5,24 +5,64 @@
 <!-- Summary Cards -->
 <div class="row g-3 mb-4">
   <div class="col-md-4">
-    <div class="stat-card bg-info text-white">
-      <div class="stat-icon"><i class="fa-solid fa-file-invoice"></i></div>
-      <div><div class="stat-num">₹<%- summary ? parseFloat(summary.total_fees).toLocaleString('en-IN') : '0' %></div><div class="stat-label">Total Fees</div></div>
+    <div class="stat-card bg-primary text-white">
+      <div class="stat-icon"><i class="fa-solid fa-calendar-check"></i></div>
+      <div>
+        <div class="stat-num">₹<%- typeof feeData !== 'undefined' ? parseFloat(feeData.monthly_rate).toLocaleString('en-IN') : '0' %><small class="fs-6 fw-normal">/mo</small></div>
+        <div class="stat-label">
+          Monthly Rate (Tuition: ₹<%- typeof feeData !== 'undefined' ? feeData.monthly_tuition : '0' %><% if(typeof feeData !== 'undefined' && feeData.monthly_van > 0) { %> + Van: ₹<%- feeData.monthly_van %><% } %>)
+        </div>
+      </div>
     </div>
   </div>
   <div class="col-md-4">
     <div class="stat-card bg-success text-white">
-      <div class="stat-icon"><i class="fa-solid fa-check-circle"></i></div>
-      <div><div class="stat-num">₹<%- summary ? parseFloat(summary.paid).toLocaleString('en-IN') : '0' %></div><div class="stat-label">Amount Paid</div></div>
+      <div class="stat-icon"><i class="fa-solid fa-receipt"></i></div>
+      <div>
+        <div class="stat-num">₹<%- summary ? parseFloat(summary.paid).toLocaleString('en-IN') : '0' %></div>
+        <div class="stat-label">
+          Total Paid to Date <% if(typeof feeData !== 'undefined' && feeData.paid_months && feeData.paid_months !== 'None') { %>(<%- feeData.paid_months %>)<% } %>
+        </div>
+      </div>
     </div>
   </div>
   <div class="col-md-4">
-    <div class="stat-card bg-danger text-white">
-      <div class="stat-icon"><i class="fa-solid fa-exclamation-circle"></i></div>
-      <div><div class="stat-num">₹<%- summary ? parseFloat(summary.total_fees - summary.paid).toLocaleString('en-IN') : '0' %></div><div class="stat-label">Balance Due</div></div>
+    <div class="stat-card <%- (typeof feeData !== 'undefined' && feeData.balance > 0) ? 'bg-danger text-white' : 'bg-success text-white' %>">
+      <div class="stat-icon"><i class="fa-solid fa-circle-exclamation"></i></div>
+      <div>
+        <div class="stat-num">₹<%- typeof feeData !== 'undefined' ? parseFloat(feeData.balance).toLocaleString('en-IN') : (summary ? parseFloat(summary.balance).toLocaleString('en-IN') : '0') %></div>
+        <div class="stat-label">
+          <%- (typeof feeData !== 'undefined' && feeData.balance > 0) ? 'Total Balance Due (' + feeData.pending_months_count + ' Mo Pending)' : 'All Fees Cleared' %>
+        </div>
+      </div>
     </div>
   </div>
 </div>
+
+<% if (typeof feeData !== 'undefined' && feeData.pending_months_count > 0) { %>
+<div class="alert alert-danger d-flex flex-wrap align-items-center justify-content-between mb-4 shadow-sm py-3">
+  <div>
+    <h6 class="fw-bold mb-1 text-danger"><i class="fa-solid fa-triangle-exclamation me-2"></i>Pending Fee Notice (Ongoing Month: <%- typeof feeReport !== 'undefined' ? feeReport.currentOngoingMonth : 'Current' %>)</h6>
+    <div class="small text-dark">
+      Unpaid Months: <strong class="text-danger"><%- feeData.pending_months_text %></strong> (<%- feeData.pending_months_count %> Month<%- feeData.pending_months_count > 1 ? 's' : '' %>) &bull;
+      Monthly Dues: <strong>₹<%- parseFloat(feeData.session_due).toLocaleString('en-IN') %></strong>
+      <% if (parseFloat(feeData.previous_balance || 0) > 0) { %>
+        + Previous Balance: <strong>₹<%- parseFloat(feeData.previous_balance).toLocaleString('en-IN') %></strong>
+      <% } %>
+      = <strong>Total Due: ₹<%- parseFloat(feeData.balance).toLocaleString('en-IN') %></strong>
+    </div>
+  </div>
+  <span class="badge bg-danger fs-6 px-3 py-2 mt-2 mt-md-0"><%- feeData.pending_months_count %> Month Pending</span>
+</div>
+<% } else { %>
+<div class="alert alert-success d-flex align-items-center mb-4 shadow-sm py-3">
+  <i class="fa-solid fa-circle-check text-success fs-4 me-3"></i>
+  <div>
+    <h6 class="fw-bold mb-0 text-success">Fee Cleared Up to Ongoing Month (<%- typeof feeReport !== 'undefined' ? feeReport.currentOngoingMonth : 'Current' %>)</h6>
+    <small class="text-muted">You have no pending dues for the ongoing academic session. Thank you!</small>
+  </div>
+</div>
+<% } %>
 
 <% if (student && parseFloat(student.previous_balance || 0) > 0) { %>
 <div class="alert alert-warning d-flex align-items-center justify-content-between mb-4 shadow-sm">

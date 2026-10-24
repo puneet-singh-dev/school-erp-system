@@ -121,7 +121,7 @@ function drawReceiptVoucher(doc, p, x, y, w, h, copyType) {
   const colSrW = 20;
   const colPartW = 180;
   const colAmtW = w - 8 - colSrW - colPartW; // ~68 pt
-  const rowH = 11.5;
+  const defaultRowH = 12.5;
 
   // Parse breakdown JSON if available
   let feeItems = [];
@@ -129,18 +129,23 @@ function drawReceiptVoucher(doc, p, x, y, w, h, copyType) {
     try {
       const parsed = typeof p.breakdown_json === 'string' ? JSON.parse(p.breakdown_json) : p.breakdown_json;
       if (Array.isArray(parsed) && parsed.length > 0) {
-        feeItems = parsed.map(item => ({
-          name: (item.name || '').toUpperCase(),
-          amount: (item.amount !== undefined && item.amount !== null && item.amount !== '') ? parseFloat(item.amount) : null
-        }));
+        feeItems = parsed.map(item => {
+          // Remove any bracketed route/address like [NAINI] or [KARMA BAZAR] as requested
+          let cleanName = (item.name || '').replace(/\s*\[.*?\]\s*/g, ' ').replace(/\s+/g, ' ').trim().toUpperCase();
+          return {
+            name: cleanName,
+            amount: (item.amount !== undefined && item.amount !== null && item.amount !== '') ? parseFloat(item.amount) : null
+          };
+        });
       }
     } catch (e) {}
   }
 
   // Fallback to primary fee type if no breakdown stored
   if (feeItems.length === 0) {
+    let cleanPrimary = (p.fee_type || 'TUITION FEES').replace(/\s*\[.*?\]\s*/g, ' ').replace(/\s+/g, ' ').trim().toUpperCase();
     feeItems.push({
-      name: (p.fee_type || 'TUITION FEES').toUpperCase(),
+      name: cleanPrimary,
       amount: parseFloat(p.amount_paid)
     });
   }
@@ -153,15 +158,30 @@ function drawReceiptVoucher(doc, p, x, y, w, h, copyType) {
   // Display all components (up to 8 items comfortably fit before summary rows)
   const displayItems = feeItems.slice(0, 8);
   const numItemRows = displayItems.length;
-  const totalGridRows = numItemRows + 3; // + Total Amount, Received Amt, Balance
-  const tableBottomY = tableY + rowH * (totalGridRows + 1); // +1 for header
+
+  // Calculate dynamic heights for each row so text never collides or overlaps
+  const itemRowHeights = [];
+  for (let i = 0; i < numItemRows; i++) {
+    const item = displayItems[i];
+    if (item && item.name) {
+      doc.fontSize(6.5).font('Helvetica');
+      const h = doc.heightOfString(item.name, { width: colPartW - 6 });
+      itemRowHeights.push(Math.max(defaultRowH, Math.ceil(h + 4)));
+    } else {
+      itemRowHeights.push(defaultRowH);
+    }
+  }
+
+  const totalItemsHeight = itemRowHeights.reduce((acc, curr) => acc + curr, 0);
+  const summaryRowH = 12;
+  const tableBottomY = tableY + defaultRowH + totalItemsHeight + (summaryRowH * 3);
 
   // Table Header
-  doc.rect(x + 4, tableY, w - 8, rowH).fillAndStroke('#f0f0f0', '#000000');
+  doc.rect(x + 4, tableY, w - 8, defaultRowH).fillAndStroke('#f0f0f0', '#000000');
   doc.fillColor('#000000').font('Helvetica-Bold').fontSize(6.5);
   doc.text('Sr.', x + 4, tableY + 2.5, { width: colSrW, align: 'center' });
   doc.text('Particulars', x + 4 + colSrW + 4, tableY + 2.5, { width: colPartW - 6, align: 'left' });
-  doc.text('Amount (₹)', x + 4 + colSrW + colPartW, tableY + 2.5, { width: colAmtW - 5, align: 'right' });
+  doc.text('Amount (Rs.)', x + 4 + colSrW + colPartW, tableY + 2.5, { width: colAmtW - 5, align: 'right' });
 
   // Vertical column dividers
   doc.moveTo(x + 4 + colSrW, tableY).lineTo(x + 4 + colSrW, tableBottomY).stroke('#000000');
@@ -169,20 +189,25 @@ function drawReceiptVoucher(doc, p, x, y, w, h, copyType) {
 
   // Data rows (Individual fee components)
   let computedTotal = 0;
+  let runningY = tableY + defaultRowH;
+
   for (let i = 0; i < numItemRows; i++) {
-    const curRowY = tableY + rowH * (i + 1);
-    doc.rect(x + 4, curRowY, w - 8, rowH).stroke('#000000');
-    doc.font('Helvetica').fontSize(6.5).fillColor('#000000');
+    const curH = itemRowHeights[i];
+    doc.rect(x + 4, runningY, w - 8, curH).stroke('#000000');
     
     const item = displayItems[i];
     if (item && item.name) {
-      doc.text(String(i + 1), x + 4, curRowY + 2.5, { width: colSrW, align: 'center' });
-      doc.text(item.name, x + 4 + colSrW + 4, curRowY + 2.5, { width: colPartW - 6, align: 'left' });
+      const fSize = item.name.length > 35 ? 5.8 : 6.5;
+      doc.font('Helvetica').fontSize(fSize).fillColor('#000000');
+      doc.text(String(i + 1), x + 4, runningY + 2.5, { width: colSrW, align: 'center' });
+      doc.text(item.name, x + 4 + colSrW + 4, runningY + 2.5, { width: colPartW - 6, align: 'left' });
       if (item.amount !== null && !isNaN(item.amount)) {
         computedTotal += item.amount;
-        doc.text(item.amount.toFixed(2), x + 4 + colSrW + colPartW, curRowY + 2.5, { width: colAmtW - 5, align: 'right' });
+        doc.font('Helvetica').fontSize(6.5);
+        doc.text(item.amount.toFixed(2), x + 4 + colSrW + colPartW, runningY + 2.5, { width: colAmtW - 5, align: 'right' });
       }
     }
+    runningY += curH;
   }
 
   // Summary Rows
@@ -190,29 +215,29 @@ function drawReceiptVoucher(doc, p, x, y, w, h, copyType) {
   const totalAmount = computedTotal > 0 ? computedTotal : (parseFloat(p.total_amount) || receivedAmount);
 
   // Row: Total Amount
-  const totalRowY = tableY + rowH * (numItemRows + 1);
-  doc.rect(x + 4, totalRowY, w - 8, rowH).stroke('#000000');
+  const totalRowY = runningY;
+  doc.rect(x + 4, totalRowY, w - 8, summaryRowH).stroke('#000000');
   doc.font('Helvetica-Bold').fontSize(6.5).fillColor('#000000');
   doc.text('Total Amount', x + 4 + 6, totalRowY + 2.5, { width: colSrW + colPartW - 10, align: 'left' });
   doc.text(totalAmount.toFixed(2), x + 4 + colSrW + colPartW, totalRowY + 2.5, { width: colAmtW - 5, align: 'right' });
 
   // Row: Received Amt
-  const recRowY = tableY + rowH * (numItemRows + 2);
-  doc.rect(x + 4, recRowY, w - 8, rowH).stroke('#000000');
+  const recRowY = totalRowY + summaryRowH;
+  doc.rect(x + 4, recRowY, w - 8, summaryRowH).stroke('#000000');
   doc.font('Helvetica-Bold').fontSize(6.5).fillColor('#000000');
   doc.text('Received Amt:', x + 4 + 6, recRowY + 2.5, { width: colSrW + colPartW - 10, align: 'left' });
   doc.text(receivedAmount.toFixed(2), x + 4 + colSrW + colPartW, recRowY + 2.5, { width: colAmtW - 5, align: 'right' });
 
   // Row: Balance
-  const balRowY = tableY + rowH * (numItemRows + 3);
+  const balRowY = recRowY + summaryRowH;
   const balance = Math.max(0, totalAmount - receivedAmount);
-  doc.rect(x + 4, balRowY, w - 8, rowH).stroke('#000000');
+  doc.rect(x + 4, balRowY, w - 8, summaryRowH).stroke('#000000');
   doc.font('Helvetica-Bold').fontSize(6.5).fillColor('#000000');
   doc.text('Balance:', x + 4 + 6, balRowY + 2.5, { width: colSrW + colPartW - 10, align: 'left' });
   doc.text(balance.toFixed(2), x + 4 + colSrW + colPartW, balRowY + 2.5, { width: colAmtW - 5, align: 'right' });
 
   // 6. Amount in words & Payment Mode
-  const wordsY = balRowY + rowH + 4;
+  const wordsY = balRowY + summaryRowH + 4;
   doc.font('Helvetica-Bold').fontSize(6.2).fillColor('#000000')
      .text('Amount in words: ', x + 6, wordsY, { continued: true })
      .font('Helvetica').text(numberToWordsINR(receivedAmount));

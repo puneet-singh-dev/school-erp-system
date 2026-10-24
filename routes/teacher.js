@@ -95,6 +95,9 @@ router.post('/attendance/save', async (req, res) => {
   }
 });
 
+const { generateReportCardPDF } = require('../utils/reportCardPdf');
+const { calculateClassRanks } = require('../utils/examRankHelper');
+
 // Results entry
 router.get('/results', async (req, res) => {
   const userId = req.session.user.id;
@@ -124,19 +127,58 @@ router.post('/results/save/:examId', async (req, res) => {
   try {
     if (marks && typeof marks === 'object') {
       for (const [key, marksVal] of Object.entries(marks)) {
+        if (marksVal === '' || marksVal === undefined || marksVal === null) continue;
         const [studentId, subjectId] = key.split('_');
         const [subjectRows] = await db.query('SELECT max_marks FROM subjects WHERE id=?', [subjectId]);
         const maxMarks = subjectRows[0]?.max_marks || 100;
-        const pct = (marksVal / maxMarks) * 100;
-        const grade = pct >= 90 ? 'A+' : pct >= 80 ? 'A' : pct >= 70 ? 'B' : pct >= 60 ? 'C' : pct >= 50 ? 'D' : 'F';
+        const numVal = parseFloat(marksVal) || 0;
+        const pct = (numVal / maxMarks) * 100;
+        const grade = pct >= 90 ? 'A+' : pct >= 80 ? 'A' : pct >= 70 ? 'B' : pct >= 60 ? 'C' : pct >= 50 ? 'D' : (pct >= 33 ? 'E' : 'F');
         await db.query(`INSERT INTO results (student_id,exam_id,subject_id,marks_obtained,max_marks,grade,entered_by) VALUES (?,?,?,?,?,?,?)
           ON DUPLICATE KEY UPDATE marks_obtained=?,grade=?,entered_by=?`,
-          [studentId, req.params.examId, subjectId, marksVal, maxMarks, grade, req.session.user.id, marksVal, grade, req.session.user.id]);
+          [studentId, req.params.examId, subjectId, numVal, maxMarks, grade, req.session.user.id, numVal, grade, req.session.user.id]);
       }
     }
-    req.flash('success_msg', 'Results saved');
+    req.flash('success_msg', 'Results saved successfully');
     res.redirect(`/teacher/results/enter/${req.params.examId}`);
-  } catch (err) { console.error(err); req.flash('error_msg', 'Error'); res.redirect('/teacher/results'); }
+  } catch (err) { console.error(err); req.flash('error_msg', 'Error saving results: ' + err.message); res.redirect('/teacher/results'); }
+});
+
+// Teacher Report Card view/download
+router.get('/results/report-card/:studentId/:examId', async (req, res) => {
+  try {
+    const [students] = await db.query(`SELECT s.*, u.name as student_name, u.email, c.name as class_name, c.section, c.academic_year 
+      FROM students s 
+      JOIN users u ON s.user_id=u.id 
+      LEFT JOIN classes c ON s.class_id=c.id 
+      WHERE s.id=?`, [req.params.studentId]);
+    if (!students.length) return res.status(404).send('Student not found');
+    const student = students[0];
+
+    const [exams] = await db.query('SELECT * FROM exams WHERE id=?', [req.params.examId]);
+    if (!exams.length) return res.status(404).send('Exam not found');
+    const currentExam = exams[0];
+
+    const [subjects] = await db.query('SELECT * FROM subjects WHERE class_id=? ORDER BY name', [student.class_id]);
+    const [currentResults] = await db.query('SELECT * FROM results WHERE student_id=? AND exam_id=?', [student.id, currentExam.id]);
+
+    const isAnnual = /annual|3rd|third|final/i.test(currentExam.name) || req.query.consolidated === '1';
+
+    const [allExams] = await db.query('SELECT * FROM exams WHERE class_id=? ORDER BY id ASC', [student.class_id]);
+    let allResults = [];
+    if (allExams.length > 0) {
+      const examIds = allExams.map(e => e.id);
+      const [resRows] = await db.query('SELECT * FROM results WHERE student_id=? AND exam_id IN (?)', [student.id, examIds]);
+      allResults = resRows;
+    }
+
+    const { ranksMap } = await calculateClassRanks(student.class_id, currentExam.id, isAnnual);
+
+    generateReportCardPDF(res, student, currentExam, subjects, currentResults, ranksMap, allExams, allResults);
+  } catch (err) {
+    console.error('Error generating report card:', err);
+    res.status(500).send('Error generating report card: ' + err.message);
+  }
 });
 
 // View my students

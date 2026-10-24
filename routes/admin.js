@@ -14,6 +14,10 @@ const { generateClassFeeRemindersHindiPDF } = require('../utils/feeReminderHindi
 const { generateClassStudentListPDF } = require('../utils/classListPdf');
 const { generateStudentListPDF } = require('../utils/studentListPdf');
 const { ensureDemoColumn, getNextSequentialAdmissionNo, generateDemoData, clearDemoData } = require('../utils/demoData');
+const { generateReportCardPDF } = require('../utils/reportCardPdf');
+const { calculateClassRanks } = require('../utils/examRankHelper');
+const { getPendingFeeReport } = require('../utils/feeReport');
+const { generateSqlBackup } = require('../utils/dbBackup');
 
 // Configure Multer for student profile photo uploads
 const uploadDir = path.join(__dirname, '../public/uploads/students');
@@ -225,6 +229,16 @@ router.post('/demo/clear', async (req, res) => {
     console.error('Error clearing demo data:', err);
     req.flash('error_msg', 'Error clearing demo data: ' + err.message);
     res.redirect('/admin');
+  }
+});
+
+// ==================== DATABASE BACKUP ====================
+router.get('/backup/download', async (req, res) => {
+  try {
+    await generateSqlBackup(res);
+  } catch (err) {
+    console.error('Database backup error:', err);
+    res.status(500).send('Error generating database backup: ' + err.message);
   }
 });
 
@@ -855,7 +869,6 @@ router.post('/fees/collect', async (req, res) => {
     if (vanFeeEnabled && vanFeeTotal > 0) {
       let vanLabel = 'School Van / Transport Fee';
       if (vanMonths) vanLabel += ` (${vanMonths})`;
-      if (vanRoute) vanLabel += ` [${vanRoute}]`;
 
       breakdown.push({
         name: vanLabel,
@@ -1029,145 +1042,6 @@ router.get('/fees/receipt/:id', async (req, res) => {
     res.status(500).send('Error generating receipt: ' + err.message);
   }
 });
-
-// ==================== PENDING FEE ENGINE ====================
-async function getPendingFeeReport({ class_id = null, student_id = null, up_to_month = null } = {}) {
-  const sessionMonthsOrder = ['APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC', 'JAN', 'FEB', 'MAR'];
-  const calMonthToSession = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-  
-  const currentCalMonth = new Date().getMonth();
-  const currentOngoingMonth = calMonthToSession[currentCalMonth];
-  const targetMonth = (up_to_month && sessionMonthsOrder.includes(up_to_month.toUpperCase()))
-    ? up_to_month.toUpperCase()
-    : currentOngoingMonth;
-
-  const targetIndex = sessionMonthsOrder.indexOf(targetMonth);
-  const expectedMonths = targetIndex >= 0 
-    ? sessionMonthsOrder.slice(0, targetIndex + 1) 
-    : sessionMonthsOrder.slice(0, sessionMonthsOrder.indexOf(currentOngoingMonth) + 1);
-
-  // Query students
-  let query = `
-    SELECT s.*, u.name, u.email, u.phone, u.address,
-           c.name as class_name, c.section, c.academic_year
-    FROM students s
-    JOIN users u ON s.user_id = u.id
-    LEFT JOIN classes c ON s.class_id = c.id
-    WHERE 1=1
-  `;
-  const params = [];
-  if (class_id) {
-    query += ` AND s.class_id = ?`;
-    params.push(class_id);
-  }
-  if (student_id) {
-    query += ` AND s.id = ?`;
-    params.push(student_id);
-  }
-  query += ` ORDER BY (s.roll_number IS NULL OR s.roll_number = 0), s.roll_number ASC, u.name ASC`;
-
-  const [students] = await db.query(query, params);
-  if (!students.length) {
-    return { students: [], targetMonth, currentOngoingMonth, expectedMonths, sessionMonthsOrder };
-  }
-
-  // Fetch fee structures by class
-  const [feeStructures] = await db.query('SELECT * FROM fee_structure');
-  const classFeeMap = {};
-  feeStructures.forEach(fs => {
-    if (!classFeeMap[fs.class_id]) classFeeMap[fs.class_id] = [];
-    classFeeMap[fs.class_id].push(fs);
-  });
-
-  // Fetch all fee payments for these students
-  const studentIds = students.map(s => s.id);
-  const [payments] = await db.query(
-    `SELECT student_id, amount_paid, months_paid, breakdown_json FROM fee_payments WHERE student_id IN (?)`,
-    [studentIds]
-  );
-  const studentPaymentsMap = {};
-  payments.forEach(p => {
-    if (!studentPaymentsMap[p.student_id]) studentPaymentsMap[p.student_id] = [];
-    studentPaymentsMap[p.student_id].push(p);
-  });
-
-  const pendingList = [];
-
-  for (const s of students) {
-    // 1. Determine monthly tuition fee
-    const structs = classFeeMap[s.class_id] || [];
-    let monthlyTuition = 0;
-    if (structs.length > 0) {
-      const tuitionStruct = structs.find(st => st.fee_type && /tuit|tuition/i.test(st.fee_type)) || structs[0];
-      monthlyTuition = parseFloat(tuitionStruct.amount) || 0;
-    }
-    if (monthlyTuition <= 0) monthlyTuition = 500; // fallback sensible default
-
-    // 2. Transport fee
-    const monthlyVan = (s.uses_transport == 1 || s.uses_transport === true) ? (parseFloat(s.transport_fee) || 0) : 0;
-    const monthlyRate = monthlyTuition + monthlyVan;
-
-    // 3. Paid months
-    const sPayments = studentPaymentsMap[s.id] || [];
-    const paidMonthsSet = new Set();
-    let totalPaidAmt = 0;
-    sPayments.forEach(p => {
-      totalPaidAmt += parseFloat(p.amount_paid) || 0;
-      if (p.months_paid) {
-        p.months_paid.split(',').forEach(m => {
-          const clean = m.trim().toUpperCase();
-          if (clean) paidMonthsSet.add(clean);
-        });
-      }
-    });
-
-    // 4. Pending months up to targetMonth
-    const unpaidMonths = expectedMonths.filter(m => !paidMonthsSet.has(m));
-    const pendingMonthsCount = unpaidMonths.length;
-    const sessionDue = pendingMonthsCount * monthlyRate;
-    const prevBalance = parseFloat(s.previous_balance) || 0;
-    const totalDue = sessionDue + prevBalance;
-
-    if (totalDue > 0) {
-      pendingList.push({
-        student_id: s.id,
-        id: s.id,
-        name: s.name,
-        admission_no: s.admission_no,
-        roll_number: s.roll_number,
-        class_id: s.class_id,
-        class_name: s.class_name,
-        section: s.section,
-        phone: s.phone,
-        address: s.address,
-        father_name: s.father_name,
-        uses_transport: s.uses_transport,
-        transport_route: s.transport_route,
-        monthly_tuition: monthlyTuition,
-        monthly_van: monthlyVan,
-        monthly_rate: monthlyRate,
-        paid_months: Array.from(paidMonthsSet).join(', ') || 'None',
-        unpaid_months: unpaidMonths,
-        pending_months_text: unpaidMonths.join(', ') || 'None',
-        pending_months_count: pendingMonthsCount,
-        session_due: sessionDue,
-        previous_balance: prevBalance,
-        previous_balance_remarks: s.previous_balance_remarks,
-        total_fees: sessionDue + prevBalance,
-        paid: totalPaidAmt,
-        balance: totalDue
-      });
-    }
-  }
-
-  return {
-    students: pendingList,
-    targetMonth,
-    currentOngoingMonth,
-    expectedMonths,
-    sessionMonthsOrder
-  };
-}
 
 // Fee Reminder Notice PDF
 router.get('/fees/reminder/:studentId', async (req, res) => {
@@ -1356,16 +1230,71 @@ router.get('/results', async (req, res) => {
 
 router.post('/exams/add', async (req, res) => {
   const { name, class_id, exam_date, academic_year } = req.body;
-  await db.query('INSERT INTO exams (name,class_id,exam_date,academic_year) VALUES (?,?,?,?)', [name, class_id, exam_date || null, academic_year]);
-  req.flash('success_msg', 'Exam added');
+  await db.query('INSERT INTO exams (name,class_id,exam_date,academic_year) VALUES (?,?,?,?)', [name, class_id, exam_date || null, academic_year || '2026-27']);
+  req.flash('success_msg', 'Exam added successfully');
   res.redirect('/admin/results');
+});
+
+// Setup standard exams: 1st Term, 2nd Term, 3rd Term/Annual Exam (+ Pre-Board for Class 10 & 12)
+router.post('/exams/setup-standard', async (req, res) => {
+  try {
+    const { class_id, academic_year } = req.body;
+    const year = academic_year || '2026-27';
+
+    let targetClasses = [];
+    if (!class_id || class_id === 'all') {
+      [targetClasses] = await db.query('SELECT * FROM classes ORDER BY name, section');
+    } else {
+      [targetClasses] = await db.query('SELECT * FROM classes WHERE id = ?', [class_id]);
+    }
+
+    if (!targetClasses.length) {
+      req.flash('error_msg', 'No classes found to configure exams.');
+      return res.redirect('/admin/results');
+    }
+
+    let createdCount = 0;
+    for (const cls of targetClasses) {
+      const isBoardClass = /\b(10|12|x|xii)\b/i.test(cls.name);
+      const standardExams = [
+        { name: '1st Term Examination', date: `${year.split('-')[0]}-09-15` },
+        { name: '2nd Term Examination', date: `${year.split('-')[0]}-12-15` },
+        { name: '3rd Term / Annual Examination', date: `20${year.split('-')[1] || '27'}-03-15` }
+      ];
+
+      if (isBoardClass) {
+        standardExams.push({ name: 'Pre-Board Examination', date: `20${year.split('-')[1] || '27'}-01-20` });
+      }
+
+      for (const ex of standardExams) {
+        const [existing] = await db.query(
+          'SELECT id FROM exams WHERE class_id = ? AND name = ? AND academic_year = ?',
+          [cls.id, ex.name, year]
+        );
+        if (!existing.length) {
+          await db.query(
+            'INSERT INTO exams (name, class_id, exam_date, academic_year) VALUES (?, ?, ?, ?)',
+            [ex.name, cls.id, ex.date, year]
+          );
+          createdCount++;
+        }
+      }
+    }
+
+    req.flash('success_msg', `Configured standard exams successfully! Added ${createdCount} exam entries.`);
+    res.redirect('/admin/results');
+  } catch (err) {
+    console.error('Error setting up standard exams:', err);
+    req.flash('error_msg', 'Error setting up standard exams: ' + err.message);
+    res.redirect('/admin/results');
+  }
 });
 
 router.get('/results/enter/:examId', async (req, res) => {
   const [exams] = await db.query('SELECT e.*, c.name as class_name, c.id as class_id FROM exams e JOIN classes c ON e.class_id=c.id WHERE e.id=?', [req.params.examId]);
   if (!exams.length) { req.flash('error_msg', 'Exam not found'); return res.redirect('/admin/results'); }
   const exam = exams[0];
-  const [students] = await db.query(`SELECT s.id, u.name, s.roll_number, s.admission_no FROM students s JOIN users u ON s.user_id=u.id WHERE s.class_id=? ORDER BY s.roll_number`, [exam.class_id]);
+  const [students] = await db.query(`SELECT s.id, u.name, s.roll_number, s.admission_no FROM students s JOIN users u ON s.user_id=u.id WHERE s.class_id=? ORDER BY (s.roll_number IS NULL OR s.roll_number = 0), s.roll_number ASC, u.name ASC`, [exam.class_id]);
   const [subjects] = await db.query('SELECT * FROM subjects WHERE class_id=? ORDER BY name', [exam.class_id]);
   const [existingResults] = await db.query('SELECT * FROM results WHERE exam_id=?', [req.params.examId]);
   const resultsMap = {};
@@ -1378,120 +1307,60 @@ router.post('/results/save/:examId', async (req, res) => {
   try {
     if (marks && typeof marks === 'object') {
       for (const [key, marksVal] of Object.entries(marks)) {
+        if (marksVal === '' || marksVal === undefined || marksVal === null) continue;
         const [studentId, subjectId] = key.split('_');
         const [subjects] = await db.query('SELECT max_marks FROM subjects WHERE id=?', [subjectId]);
         const maxMarks = subjects[0]?.max_marks || 100;
-        const pct = (marksVal / maxMarks) * 100;
-        const grade = pct >= 90 ? 'A+' : pct >= 80 ? 'A' : pct >= 70 ? 'B' : pct >= 60 ? 'C' : pct >= 50 ? 'D' : 'F';
+        const numVal = parseFloat(marksVal) || 0;
+        const pct = (numVal / maxMarks) * 100;
+        // Standard grading with strict 33% minimum passing rule
+        const grade = pct >= 90 ? 'A+' : pct >= 80 ? 'A' : pct >= 70 ? 'B' : pct >= 60 ? 'C' : pct >= 50 ? 'D' : (pct >= 33 ? 'E' : 'F');
         await db.query(`INSERT INTO results (student_id,exam_id,subject_id,marks_obtained,max_marks,grade,entered_by) VALUES (?,?,?,?,?,?,?)
           ON DUPLICATE KEY UPDATE marks_obtained=?,grade=?,entered_by=?`,
-          [studentId, req.params.examId, subjectId, marksVal, maxMarks, grade, req.session.user.id, marksVal, grade, req.session.user.id]);
+          [studentId, req.params.examId, subjectId, numVal, maxMarks, grade, req.session.user.id, numVal, grade, req.session.user.id]);
       }
     }
-    req.flash('success_msg', 'Results saved');
+    req.flash('success_msg', 'Results saved successfully');
     res.redirect(`/admin/results/enter/${req.params.examId}`);
-  } catch (err) { console.error(err); req.flash('error_msg', 'Error saving results'); res.redirect('/admin/results'); }
+  } catch (err) { console.error(err); req.flash('error_msg', 'Error saving results: ' + err.message); res.redirect('/admin/results'); }
 });
 
-// Report Card PDF
+// Official Student Progress Report Card PDF (Single Term & Consolidated Annual)
 router.get('/results/report-card/:studentId/:examId', async (req, res) => {
   try {
-    const [students] = await db.query(`SELECT s.*, u.name as student_name, u.email, c.name as class_name, c.section, c.academic_year FROM students s JOIN users u ON s.user_id=u.id LEFT JOIN classes c ON s.class_id=c.id WHERE s.id=?`, [req.params.studentId]);
+    const [students] = await db.query(`SELECT s.*, u.name as student_name, u.email, c.name as class_name, c.section, c.academic_year 
+      FROM students s 
+      JOIN users u ON s.user_id=u.id 
+      LEFT JOIN classes c ON s.class_id=c.id 
+      WHERE s.id=?`, [req.params.studentId]);
     if (!students.length) return res.status(404).send('Student not found');
     const student = students[0];
+
     const [exams] = await db.query('SELECT * FROM exams WHERE id=?', [req.params.examId]);
     if (!exams.length) return res.status(404).send('Exam not found');
-    const exam = exams[0];
-    const [results] = await db.query(`SELECT r.*, sub.name as subject_name, sub.max_marks FROM results r JOIN subjects sub ON r.subject_id=sub.id WHERE r.student_id=? AND r.exam_id=? ORDER BY sub.name`, [req.params.studentId, req.params.examId]);
+    const currentExam = exams[0];
 
-    const doc = new PDFDocument({ size: 'A4', margin: 40 });
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename=report_card_${student.admission_no}.pdf`);
-    doc.pipe(res);
+    const [subjects] = await db.query('SELECT * FROM subjects WHERE class_id=? ORDER BY name', [student.class_id]);
+    const [currentResults] = await db.query('SELECT * FROM results WHERE student_id=? AND exam_id=?', [student.id, currentExam.id]);
 
-    // Header Box with School Logo & Branding
-    const logoPath = path.join(__dirname, '../public/img/logo.png');
-    doc.rect(40, 36, 515, 88).fill('#1a365d').stroke();
-    
-    if (fs.existsSync(logoPath)) {
-      try {
-        doc.image(logoPath, 52, 44, { width: 70, height: 70 });
-      } catch (err) {}
+    const isAnnual = /annual|3rd|third|final/i.test(currentExam.name) || req.query.consolidated === '1';
+
+    // Retrieve all exams for the class to populate side-by-side terms if annual or consolidated
+    const [allExams] = await db.query('SELECT * FROM exams WHERE class_id=? ORDER BY id ASC', [student.class_id]);
+    let allResults = [];
+    if (allExams.length > 0) {
+      const examIds = allExams.map(e => e.id);
+      const [resRows] = await db.query('SELECT * FROM results WHERE student_id=? AND exam_id IN (?)', [student.id, examIds]);
+      allResults = resRows;
     }
 
-    const headerTextX = 130;
-    const headerTextW = 415;
-    const schoolName = process.env.SCHOOL_NAME || 'Shri Amrit Lal Smarak School And College';
-    const schoolAddress = process.env.SCHOOL_ADDRESS || 'Vijay Nagar, Karma Bazar, Prayagraj (U.P) - Mob: 9129914501';
+    const { ranksMap } = await calculateClassRanks(student.class_id, currentExam.id, isAnnual);
 
-    doc.fillColor('white').fontSize(15).font('Helvetica-Bold')
-       .text(schoolName.toUpperCase(), headerTextX, 48, { width: headerTextW, align: 'center' });
-    doc.fontSize(8.5).font('Helvetica')
-       .text(schoolAddress, headerTextX, 70, { width: headerTextW, align: 'center' });
-    doc.fontSize(11).font('Helvetica-Bold').fillColor('#f6e05e')
-       .text('PROGRESS REPORT CARD (SESSION 2026-27)', headerTextX, 86, { width: headerTextW, align: 'center' });
-    
-    doc.fillColor('black');
-
-    doc.fontSize(12).font('Helvetica-Bold').text('STUDENT ACADEMIC PROFILE', 40, 136);
-    doc.moveTo(40, 152).lineTo(555, 152).stroke();
-
-    doc.fontSize(10).font('Helvetica');
-    const y1 = 158;
-    doc.font('Helvetica-Bold').text('Name:', 40, y1).font('Helvetica').text(student.student_name, 90, y1);
-    doc.font('Helvetica-Bold').text('Class:', 300, y1).font('Helvetica').text(`${student.class_name} - ${student.section}`, 340, y1);
-    doc.font('Helvetica-Bold').text('Adm. No:', 40, y1 + 18).font('Helvetica').text(student.admission_no, 95, y1 + 18);
-    doc.font('Helvetica-Bold').text('Roll No:', 300, y1 + 18).font('Helvetica').text(student.roll_number || '-', 345, y1 + 18);
-    doc.font('Helvetica-Bold').text('Exam:', 40, y1 + 36).font('Helvetica').text(exam.name, 80, y1 + 36);
-    doc.font('Helvetica-Bold').text('Session:', 300, y1 + 36).font('Helvetica').text(student.academic_year || '2026-27', 350, y1 + 36);
-
-    const tableY = y1 + 65;
-    doc.rect(40, tableY, 515, 22).fill('#1a5276').stroke();
-    doc.fillColor('white').font('Helvetica-Bold').fontSize(10);
-    doc.text('Subject', 50, tableY + 6);
-    doc.text('Max Marks', 230, tableY + 6);
-    doc.text('Marks Obtained', 310, tableY + 6);
-    doc.text('Grade', 450, tableY + 6);
-    doc.text('Remarks', 490, tableY + 6);
-    doc.fillColor('black');
-
-    let rowY = tableY + 22;
-    let totalObtained = 0, totalMax = 0;
-    results.forEach((r, i) => {
-      if (i % 2 === 0) doc.rect(40, rowY, 515, 20).fill('#eaf4fb').stroke();
-      doc.font('Helvetica').fontSize(10).fillColor('black');
-      doc.text(r.subject_name, 50, rowY + 5);
-      doc.text(String(r.max_marks), 248, rowY + 5);
-      doc.text(String(parseFloat(r.marks_obtained).toFixed(1)), 345, rowY + 5);
-      doc.text(r.grade || '-', 458, rowY + 5);
-      doc.text(r.remarks || '', 490, rowY + 5);
-      totalObtained += parseFloat(r.marks_obtained);
-      totalMax += r.max_marks;
-      rowY += 20;
-    });
-
-    doc.rect(40, rowY, 515, 24).fill('#1a5276').stroke();
-    doc.fillColor('white').font('Helvetica-Bold').fontSize(11);
-    doc.text('TOTAL', 50, rowY + 6);
-    doc.text(String(totalMax), 248, rowY + 6);
-    doc.text(String(totalObtained.toFixed(1)), 345, rowY + 6);
-    const pct = totalMax > 0 ? (totalObtained / totalMax * 100).toFixed(1) : 0;
-    doc.text(`${pct}%`, 430, rowY + 6);
-    const finalGrade = pct >= 90 ? 'A+' : pct >= 80 ? 'A' : pct >= 70 ? 'B' : pct >= 60 ? 'C' : pct >= 50 ? 'D' : 'F';
-    const status = pct >= 33 ? 'PASS' : 'FAIL';
-    doc.fillColor('black');
-
-    rowY += 35;
-    doc.fontSize(12).font('Helvetica-Bold').text(`Overall Grade: ${finalGrade}`, 40, rowY);
-    doc.text(`Result: ${status}`, 300, rowY, { color: status === 'PASS' ? 'green' : 'red' });
-
-    doc.moveDown(3).moveTo(40, doc.y).lineTo(555, doc.y).stroke().moveDown();
-    doc.fontSize(10).font('Helvetica').text("Principal's Signature", 40, doc.y);
-    doc.text("Class Teacher's Signature", 200, doc.y - 14);
-    doc.text("Parent's Signature", 430, doc.y - 14);
-    doc.moveDown(2).fontSize(9).fillColor('gray').text('This is a computer generated report card.', { align: 'center' });
-    doc.end();
-  } catch (err) { console.error(err); res.status(500).send('Error generating report card'); }
+    generateReportCardPDF(res, student, currentExam, subjects, currentResults, ranksMap, allExams, allResults);
+  } catch (err) {
+    console.error('Error generating report card:', err);
+    res.status(500).send('Error generating report card: ' + err.message);
+  }
 });
 
 // ==================== CLASS-WISE & SUBJECT-WISE MARKS STATEMENT ====================
@@ -1505,7 +1374,9 @@ router.get('/results/class-marks', async (req, res) => {
     let selectedExam = null;
     let students = [];
     let subjects = [];
-    const marksMap = {};
+    let marksMap = {};
+    let ranksMap = {};
+    let topThree = [];
 
     if (classId) {
       [[selectedClass]] = await db.query('SELECT * FROM classes WHERE id=?', [classId]);
@@ -1519,15 +1390,23 @@ router.get('/results/class-marks', async (req, res) => {
           FROM students s 
           JOIN users u ON s.user_id=u.id 
           WHERE s.class_id=? 
-          ORDER BY s.roll_number, u.name`, [classId]);
+          ORDER BY (s.roll_number IS NULL OR s.roll_number = 0), s.roll_number ASC, u.name ASC`, [classId]);
         
         [subjects] = await db.query('SELECT * FROM subjects WHERE class_id=? ORDER BY name', [classId]);
         const [results] = await db.query('SELECT * FROM results WHERE exam_id=?', [examId]);
         results.forEach(r => {
           marksMap[`${r.student_id}_${r.subject_id}`] = r;
         });
+
+        const isAnnual = /annual|3rd|third|final/i.test(selectedExam.name);
+        const rankData = await calculateClassRanks(classId, examId, isAnnual);
+        ranksMap = rankData.ranksMap;
+        topThree = rankData.topThree;
       }
     }
+
+    const schoolName = process.env.SCHOOL_NAME || 'Shri Amrit Lal Smarak School And College';
+    const schoolAddress = process.env.SCHOOL_ADDRESS || 'Vijay Nagar, Karma Bazar, Prayagraj (U.P)';
 
     res.render('admin/class-marks', {
       title: 'Class & Subject-Wise Marks Statement',
@@ -1537,7 +1416,11 @@ router.get('/results/class-marks', async (req, res) => {
       selectedExam,
       students,
       subjects,
-      marksMap
+      marksMap,
+      ranksMap,
+      topThree,
+      schoolName,
+      schoolAddress
     });
   } catch (err) {
     console.error('Error loading class marks:', err);
@@ -1561,7 +1444,7 @@ router.get('/results/class-marks/pdf', async (req, res) => {
       FROM students s 
       JOIN users u ON s.user_id=u.id 
       WHERE s.class_id=? 
-      ORDER BY s.roll_number, u.name`, [classId]);
+      ORDER BY (s.roll_number IS NULL OR s.roll_number = 0), s.roll_number ASC, u.name ASC`, [classId]);
 
     const [subjects] = await db.query('SELECT * FROM subjects WHERE class_id=? ORDER BY name', [classId]);
     const [results] = await db.query('SELECT * FROM results WHERE exam_id=?', [examId]);
@@ -1570,7 +1453,10 @@ router.get('/results/class-marks/pdf', async (req, res) => {
       marksMap[`${r.student_id}_${r.subject_id}`] = r;
     });
 
-    generateClassMarksPDF(res, selectedClass, selectedExam, students, subjects, marksMap);
+    const isAnnual = /annual|3rd|third|final/i.test(selectedExam.name);
+    const { ranksMap } = await calculateClassRanks(classId, examId, isAnnual);
+
+    generateClassMarksPDF(res, selectedClass, selectedExam, students, subjects, marksMap, ranksMap);
   } catch (err) {
     console.error('Error generating marksheet PDF:', err);
     res.status(500).send('Error generating marksheet PDF: ' + err.message);
