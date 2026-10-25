@@ -50,7 +50,8 @@
         <li class="nav-header">Media &amp; Notice</li>
         <li><a href="/admin/gallery"><i class="fa-solid fa-images"></i> School Gallery</a></li>
         <li><a href="/admin/notices"><i class="fa-solid fa-bullhorn"></i> Notices</a></li>
-        <li class="nav-header">Security</li>
+        <li class="nav-header">System &amp; Settings</li>
+        <li><a href="/admin/settings"><i class="fa-solid fa-sliders"></i> School Settings</a></li>
         <li><a href="/admin/change-password"><i class="fa-solid fa-key"></i> Change Password</a></li>
       </ul>
       <% } else if(user && user.role === 'teacher') { %>
@@ -108,6 +109,11 @@
           </small>
         </div>
         <div class="user-info d-flex align-items-center gap-2">
+          <% if(user && user.role === 'admin') { %>
+          <a href="/admin/settings" class="btn btn-sm btn-outline-secondary" title="School Settings">
+            <i class="fa-solid fa-gear me-1"></i>Settings
+          </a>
+          <% } %>
           <span class="badge bg-primary"><%- user ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : '' %></span>
           <i class="fa-solid fa-user-circle fa-lg text-muted"></i>
           <span class="fw-semibold"><%- user ? user.name : 'Guest' %></span>

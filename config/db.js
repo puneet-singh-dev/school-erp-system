@@ -493,6 +493,14 @@ async function ensureSchema() {
       console.log('Demo initial seed notice:', dErr.message);
     }
 
+    // 8. Initialize dynamic school settings
+    try {
+      const { initSettings } = require('../utils/settingsHelper');
+      await initSettings();
+    } catch (sErr) {
+      console.warn('Settings initialization notice:', sErr.message);
+    }
+
     console.log('✅ All database schema checks and seeding completed.');
   } catch (err) {
     console.error('ensureSchema error:', err.message);

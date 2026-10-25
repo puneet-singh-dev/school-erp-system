@@ -1,60 +1,470 @@
-<div class="d-flex justify-content-between align-items-center mb-4">
-  <h5 class="fw-bold mb-0"><i class="fa-solid fa-book text-primary me-2"></i>Subjects Management</h5>
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+  <div>
+    <h5 class="fw-bold mb-1"><i class="fa-solid fa-book text-primary me-2"></i>Curriculum &amp; Subjects Management</h5>
+    <span class="text-muted small">Bulk assign common subjects across Class 1-8, Class 9-10, and Class 11-12 in one click</span>
+  </div>
+  <div class="d-flex gap-2">
+    <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#copySubjectsModal">
+      <i class="fa-solid fa-clone me-1"></i>Copy Subjects Between Classes
+    </button>
+    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#singleSubjectModal">
+      <i class="fa-solid fa-plus me-1"></i>Add Single Subject
+    </button>
+  </div>
+</div>
+
+<!-- ==================== 1-CLICK COMMON CURRICULUM PRESETS ==================== -->
+<div class="card border-0 shadow-sm mb-4 bg-light">
+  <div class="card-body p-3">
+    <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2">
+      <span class="fw-bold text-dark small text-uppercase" style="letter-spacing: 0.5px;">
+        <i class="fa-solid fa-wand-magic-sparkles text-warning me-1"></i>Quick Curriculum Presets (Click to Load):
+      </span>
+      <span class="badge bg-white text-secondary border small">Auto-selects classes &amp; loads standard subjects</span>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <button type="button" class="btn btn-white btn-sm border shadow-xs fw-semibold preset-btn" onclick="applyPreset('primary_middle')">
+        <i class="fa-solid fa-shapes text-primary me-1"></i>Class 1 to 8 (Primary &amp; Middle)
+      </button>
+      <button type="button" class="btn btn-white btn-sm border shadow-xs fw-semibold preset-btn" onclick="applyPreset('secondary')">
+        <i class="fa-solid fa-book-bookmark text-success me-1"></i>Class 9 &amp; 10 (Secondary)
+      </button>
+      <button type="button" class="btn btn-white btn-sm border shadow-xs fw-semibold preset-btn" onclick="applyPreset('senior_science')">
+        <i class="fa-solid fa-atom text-info me-1"></i>Class 11 &amp; 12 (Science)
+      </button>
+      <button type="button" class="btn btn-white btn-sm border shadow-xs fw-semibold preset-btn" onclick="applyPreset('senior_commerce')">
+        <i class="fa-solid fa-chart-line text-warning me-1"></i>Class 11 &amp; 12 (Commerce)
+      </button>
+      <button type="button" class="btn btn-white btn-sm border shadow-xs fw-semibold preset-btn" onclick="applyPreset('senior_arts')">
+        <i class="fa-solid fa-landmark text-danger me-1"></i>Class 11 &amp; 12 (Arts / Humanities)
+      </button>
+    </div>
+  </div>
 </div>
 
 <div class="row g-4">
-  <div class="col-md-4">
-    <div class="card shadow-sm">
-      <div class="card-header"><h6 class="mb-0 fw-bold">Add Subject</h6></div>
-      <div class="card-body">
-        <form action="/admin/subjects/add" method="POST">
-          <div class="mb-3"><label class="form-label">Subject Name *</label><input type="text" name="name" class="form-control" placeholder="Mathematics" required></div>
-          <div class="mb-3"><label class="form-label">Subject Code</label><input type="text" name="code" class="form-control" placeholder="MATH001"></div>
+  <!-- ==================== BULK ASSIGN PANEL ==================== -->
+  <div class="col-lg-5">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header bg-primary text-white py-3">
+        <h6 class="mb-0 fw-bold"><i class="fa-solid fa-layer-group me-2"></i>Multi-Class Subject Assigner</h6>
+      </div>
+      <div class="card-body p-4">
+        <form action="/admin/subjects/bulk-assign" method="POST" id="bulkAssignForm">
+          <!-- Hidden JSON field for dynamic subjects -->
+          <input type="hidden" name="subjects_json" id="subjectsJsonInput" value="">
+
+          <!-- Class Selection Section -->
           <div class="mb-3">
-            <label class="form-label">Class *</label>
-            <select name="class_id" class="form-select" required>
-              <option value="">Select Class</option>
-              <% classes.forEach(c => { %><option value="<%- c.id %>"><%- c.name %> - <%- c.section %></option><% }) %>
-            </select>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <label class="form-label fw-bold mb-0">1. Target Classes *</label>
+              <div class="btn-group btn-group-sm">
+                <button type="button" class="btn btn-outline-secondary py-0 px-2" onclick="selectClassesByFilter('1-8')">1-8</button>
+                <button type="button" class="btn btn-outline-secondary py-0 px-2" onclick="selectClassesByFilter('9-10')">9-10</button>
+                <button type="button" class="btn btn-outline-secondary py-0 px-2" onclick="selectClassesByFilter('11-12')">11-12</button>
+                <button type="button" class="btn btn-outline-secondary py-0 px-2" onclick="selectAllClasses(true)">All</button>
+                <button type="button" class="btn btn-outline-secondary py-0 px-2" onclick="selectAllClasses(false)">None</button>
+              </div>
+            </div>
+
+            <div class="border rounded p-2 bg-light" style="max-height: 175px; overflow-y: auto;">
+              <% if(classes && classes.length > 0) { %>
+                <div class="row g-1">
+                  <% classes.forEach(c => { 
+                       const count = (subjectCounts && subjectCounts[c.id]) || 0;
+                  %>
+                  <div class="col-6">
+                    <div class="form-check small py-1">
+                      <input class="form-check-input class-checkbox" type="checkbox" name="class_ids" value="<%- c.id %>" id="cls_chk_<%- c.id %>" data-name="<%- c.name.toLowerCase() %>">
+                      <label class="form-check-label text-truncate d-block" for="cls_chk_<%- c.id %>" title="<%- c.name %> - <%- c.section %>">
+                        <strong><%- c.name %></strong> (<%- c.section %>)
+                        <span class="badge bg-white text-muted border py-0 px-1"><%- count %> subs</span>
+                      </label>
+                    </div>
+                  </div>
+                  <% }) %>
+                </div>
+              <% } else { %>
+                <div class="text-muted small text-center py-2">No classes created yet. Please create classes first.</div>
+              <% } %>
+            </div>
           </div>
+
+          <!-- Subject Selection Section -->
           <div class="mb-3">
-            <label class="form-label">Subject Teacher</label>
-            <select name="teacher_id" class="form-select">
-              <option value="">Select Teacher</option>
-              <% teachers.forEach(t => { %><option value="<%- t.id %>"><%- t.name %></option><% }) %>
-            </select>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <label class="form-label fw-bold mb-0">2. Subjects to Assign *</label>
+              <span class="small text-muted" id="subjectCounter">0 selected</span>
+            </div>
+
+            <!-- Subject Badges / Tag container -->
+            <div id="subjectBadgesContainer" class="border rounded p-2 bg-white mb-2 d-flex flex-wrap gap-1" style="min-height: 80px; max-height: 180px; overflow-y: auto;">
+              <span class="text-muted small m-auto" id="emptySubjectHint">Choose a preset above or type subjects below.</span>
+            </div>
+
+            <!-- Custom Subject Quick Adder -->
+            <div class="input-group input-group-sm mb-2">
+              <input type="text" id="customSubjectInput" class="form-control" placeholder="Add custom subject name...">
+              <button type="button" class="btn btn-outline-primary fw-semibold" onclick="addCustomSubject()">
+                <i class="fa-solid fa-plus me-1"></i>Add
+              </button>
+            </div>
+            <div class="form-text small">You can also type multiple subjects separated by commas or lines below:</div>
+            <textarea name="subject_names" id="subjectNamesTextarea" class="form-control form-control-sm mt-1" rows="2" placeholder="e.g. Mathematics, Science, Social Science, Hindi..."></textarea>
           </div>
-          <div class="mb-3"><label class="form-label">Max Marks</label><input type="number" name="max_marks" class="form-control" value="100"></div>
-          <button type="submit" class="btn btn-primary w-100">Add Subject</button>
+
+          <!-- Default Max Marks -->
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">Default Maximum Marks</label>
+            <input type="number" name="default_max_marks" class="form-control form-control-sm" value="100" min="10" max="500">
+          </div>
+
+          <button type="submit" class="btn btn-primary w-100 fw-bold shadow-sm py-2">
+            <i class="fa-solid fa-check-double me-1"></i>Assign Subjects to Selected Classes
+          </button>
         </form>
       </div>
     </div>
   </div>
 
-  <div class="col-md-8">
-    <div class="card shadow-sm">
-      <div class="card-header"><h6 class="mb-0 fw-bold">All Subjects (<%- subjects.length %>)</h6></div>
-      <div class="card-body p-0">
-        <table class="table table-hover align-middle mb-0">
-          <thead class="table-dark"><tr><th>Subject</th><th>Code</th><th>Class</th><th>Teacher</th><th>Max Marks</th><th>Action</th></tr></thead>
-          <tbody>
-            <% subjects.forEach(s => { %>
-            <tr>
-              <td><strong><%- s.name %></strong></td>
-              <td><code><%- s.code || '-' %></code></td>
-              <td><%- s.class_name %> - <%- s.section %></td>
-              <td><%- s.teacher_name || '-' %></td>
-              <td><%- s.max_marks %></td>
-              <td>
-                <form action="/admin/subjects/delete/<%- s.id %>" method="POST" onsubmit="return confirm('Delete subject?')">
-                  <button class="btn btn-sm btn-outline-danger"><i class="fa-solid fa-trash"></i></button>
-                </form>
-              </td>
-            </tr>
+  <!-- ==================== SUBJECTS MATRIX & OVERVIEW ==================== -->
+  <div class="col-lg-7">
+    <div class="card shadow-sm border-0">
+      <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div>
+          <h6 class="mb-0 fw-bold text-dark"><i class="fa-solid fa-list-check text-primary me-2"></i>Class-Wise Curriculum Overview (<%- subjects.length %> Total)</h6>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <input type="text" id="filterClassSearch" class="form-control form-control-sm" placeholder="Filter by class..." onkeyup="filterClassCards(this.value)">
+        </div>
+      </div>
+      <div class="card-body p-3" style="max-height: 680px; overflow-y: auto;">
+        <% if(classes && classes.length > 0) { %>
+          <div class="accordion" id="classesSubjectAccordion">
+            <% classes.forEach((c, idx) => { 
+                 const classSubs = (classSubjectsMap && classSubjectsMap[c.id]) || [];
+            %>
+            <div class="accordion-item mb-2 border rounded class-accordion-item" data-class-name="<%- c.name.toLowerCase() %> <%- c.section.toLowerCase() %>">
+              <h2 class="accordion-header" id="heading_<%- c.id %>">
+                <button class="accordion-button <%- idx !== 0 ? 'collapsed' : '' %> py-2.5 px-3 bg-light" type="button" data-bs-toggle="collapse" data-bs-target="#collapse_<%- c.id %>">
+                  <div class="d-flex align-items-center justify-content-between w-100 me-3">
+                    <div>
+                      <span class="fw-bold text-dark me-2"><%- c.name %> - Section <%- c.section %></span>
+                      <span class="badge <%- classSubs.length > 0 ? 'bg-primary' : 'bg-warning text-dark' %>">
+                        <%- classSubs.length %> Subjects
+                      </span>
+                    </div>
+                    <span class="text-muted small">Academic Year: <%- c.academic_year || '2026-27' %></span>
+                  </div>
+                </button>
+              </h2>
+              <div id="collapse_<%- c.id %>" class="accordion-collapse collapse <%- idx === 0 ? 'show' : '' %>" data-bs-parent="#classesSubjectAccordion">
+                <div class="accordion-body p-3">
+                  <% if(classSubs.length > 0) { %>
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                      <% classSubs.forEach(s => { %>
+                      <div class="d-inline-flex align-items-center bg-white border rounded py-1 px-2.5 shadow-xs">
+                        <div class="me-2">
+                          <strong class="text-dark small"><%- s.name %></strong>
+                          <span class="badge bg-light text-muted border ms-1" style="font-size:0.68rem;">Max: <%- s.max_marks %></span>
+                          <% if(s.teacher_name) { %>
+                            <span class="text-success small ms-1" title="Teacher"><i class="fa-solid fa-user-tie"></i> <%- s.teacher_name %></span>
+                          <% } %>
+                        </div>
+                        <form action="/admin/subjects/delete/<%- s.id %>" method="POST" onsubmit="return confirm('Delete <%- s.name %> for <%- c.name %>?');" class="m-0 p-0">
+                          <button type="submit" class="btn btn-link text-danger p-0 m-0" style="line-height:1;" title="Delete subject">
+                            <i class="fa-solid fa-xmark"></i>
+                          </button>
+                        </form>
+                      </div>
+                      <% }) %>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center pt-2 border-top">
+                      <span class="text-muted small"><i class="fa-solid fa-check text-success me-1"></i>Curriculum configured</span>
+                      <form action="/admin/subjects/bulk-delete-class" method="POST" onsubmit="return confirm('Are you sure you want to remove ALL subjects from <%- c.name %> - <%- c.section %>?');" class="m-0">
+                        <input type="hidden" name="class_id" value="<%- c.id %>">
+                        <button type="submit" class="btn btn-outline-danger btn-xs btn-sm py-0">
+                          <i class="fa-solid fa-trash-can me-1"></i>Clear All Subjects
+                        </button>
+                      </form>
+                    </div>
+                  <% } else { %>
+                    <div class="text-center py-3 text-muted small">
+                      <i class="fa-solid fa-circle-exclamation text-warning me-1"></i>No subjects configured yet for this class. Select this class on the left and assign subjects in bulk.
+                    </div>
+                  <% } %>
+                </div>
+              </div>
+            </div>
             <% }) %>
-          </tbody>
-        </table>
+          </div>
+        <% } else { %>
+          <div class="text-center py-5 text-muted">
+            <i class="fa-solid fa-book-open fa-2x mb-2 d-block"></i>
+            No classes available.
+          </div>
+        <% } %>
       </div>
     </div>
   </div>
 </div>
+
+<!-- ==================== MODAL: COPY SUBJECTS BETWEEN CLASSES ==================== -->
+<div class="modal fade" id="copySubjectsModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form action="/admin/subjects/copy" method="POST">
+        <div class="modal-header bg-primary text-white">
+          <h6 class="modal-title fw-bold"><i class="fa-solid fa-clone me-2"></i>Copy Subjects Between Classes</h6>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-bold">Source Class (Copy From) *</label>
+            <select name="source_class_id" class="form-select" required>
+              <option value="">-- Choose Class with Configured Subjects --</option>
+              <% classes.forEach(c => { 
+                   const count = (subjectCounts && subjectCounts[c.id]) || 0;
+              %>
+              <option value="<%- c.id %>"><%- c.name %> - <%- c.section %> (<%- count %> subjects)</option>
+              <% }) %>
+            </select>
+            <div class="form-text">All subjects from this class will be duplicated into the target classes.</div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-bold">Target Classes (Copy To) *</label>
+            <div class="border rounded p-2 bg-light" style="max-height: 180px; overflow-y: auto;">
+              <% classes.forEach(c => { %>
+              <div class="form-check small py-1">
+                <input class="form-check-input" type="checkbox" name="target_class_ids" value="<%- c.id %>" id="copy_target_<%- c.id %>">
+                <label class="form-check-label" for="copy_target_<%- c.id %>">
+                  <%- c.name %> - <%- c.section %>
+                </label>
+              </div>
+              <% }) %>
+            </div>
+            <div class="form-text">Existing subjects in target classes will not be duplicated.</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary fw-bold"><i class="fa-solid fa-copy me-1"></i>Copy Subjects</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== MODAL: ADD SINGLE SUBJECT ==================== -->
+<div class="modal fade" id="singleSubjectModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form action="/admin/subjects/add" method="POST">
+        <div class="modal-header bg-dark text-white">
+          <h6 class="modal-title fw-bold"><i class="fa-solid fa-plus-circle me-2"></i>Add Single Subject</h6>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-bold">Subject Name *</label>
+            <input type="text" name="name" class="form-control" placeholder="e.g. Mathematics" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Subject Code</label>
+            <input type="text" name="code" class="form-control" placeholder="e.g. MATH101">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold">Class *</label>
+            <select name="class_id" class="form-select" required>
+              <option value="">-- Select Class --</option>
+              <% classes.forEach(c => { %>
+              <option value="<%- c.id %>"><%- c.name %> - <%- c.section %></option>
+              <% }) %>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Assigned Teacher</label>
+            <select name="teacher_id" class="form-select">
+              <option value="">-- None / Unassigned --</option>
+              <% teachers.forEach(t => { %>
+              <option value="<%- t.id %>"><%- t.name %></option>
+              <% }) %>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Maximum Marks</label>
+            <input type="number" name="max_marks" class="form-control" value="100" min="10" max="500">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-dark fw-bold"><i class="fa-solid fa-plus me-1"></i>Add Subject</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+// Curriculum Presets Definitions
+const CURRICULUM_PRESETS = {
+  primary_middle: {
+    targetFilter: '1-8',
+    subjects: [
+      { name: 'Hindi', max_marks: 100 },
+      { name: 'English', max_marks: 100 },
+      { name: 'Mathematics', max_marks: 100 },
+      { name: 'Science', max_marks: 100 },
+      { name: 'Social Studies', max_marks: 100 },
+      { name: 'Sanskrit', max_marks: 100 },
+      { name: 'Computer Science', max_marks: 100 },
+      { name: 'Drawing / Art', max_marks: 100 },
+      { name: 'General Knowledge (G.K.)', max_marks: 100 }
+    ]
+  },
+  secondary: {
+    targetFilter: '9-10',
+    subjects: [
+      { name: 'Hindi', max_marks: 100 },
+      { name: 'English Language & Literature', max_marks: 100 },
+      { name: 'Mathematics', max_marks: 100 },
+      { name: 'Science (Phy/Chem/Bio)', max_marks: 100 },
+      { name: 'Social Science (Hist/Civ/Geo/Eco)', max_marks: 100 },
+      { name: 'Information Technology (IT)', max_marks: 100 }
+    ]
+  },
+  senior_science: {
+    targetFilter: '11-12',
+    subjects: [
+      { name: 'English Core', max_marks: 100 },
+      { name: 'Physics', max_marks: 100 },
+      { name: 'Chemistry', max_marks: 100 },
+      { name: 'Mathematics', max_marks: 100 },
+      { name: 'Biology', max_marks: 100 },
+      { name: 'Physical Education', max_marks: 100 },
+      { name: 'Computer Science', max_marks: 100 }
+    ]
+  },
+  senior_commerce: {
+    targetFilter: '11-12',
+    subjects: [
+      { name: 'English Core', max_marks: 100 },
+      { name: 'Accountancy', max_marks: 100 },
+      { name: 'Business Studies', max_marks: 100 },
+      { name: 'Economics', max_marks: 100 },
+      { name: 'Applied Mathematics', max_marks: 100 },
+      { name: 'Informatics Practices (IP)', max_marks: 100 },
+      { name: 'Physical Education', max_marks: 100 }
+    ]
+  },
+  senior_arts: {
+    targetFilter: '11-12',
+    subjects: [
+      { name: 'English Core', max_marks: 100 },
+      { name: 'History', max_marks: 100 },
+      { name: 'Political Science', max_marks: 100 },
+      { name: 'Geography', max_marks: 100 },
+      { name: 'Economics', max_marks: 100 },
+      { name: 'Hindi Core', max_marks: 100 },
+      { name: 'Physical Education', max_marks: 100 }
+    ]
+  }
+};
+
+let currentSelectedSubjects = [];
+
+function applyPreset(presetKey) {
+  const preset = CURRICULUM_PRESETS[presetKey];
+  if (!preset) return;
+
+  // 1. Select matching classes
+  selectClassesByFilter(preset.targetFilter);
+
+  // 2. Load subjects into memory and badge container
+  currentSelectedSubjects = JSON.parse(JSON.stringify(preset.subjects));
+  renderSubjectBadges();
+}
+
+function renderSubjectBadges() {
+  const container = document.getElementById('subjectBadgesContainer');
+  const counter = document.getElementById('subjectCounter');
+  const jsonInput = document.getElementById('subjectsJsonInput');
+
+  container.innerHTML = '';
+  if (!currentSelectedSubjects.length) {
+    container.innerHTML = '<span class="text-muted small m-auto" id="emptySubjectHint">Choose a preset above or type subjects below.</span>';
+    counter.textContent = '0 selected';
+    jsonInput.value = '';
+    return;
+  }
+
+  currentSelectedSubjects.forEach((sub, idx) => {
+    const badge = document.createElement('div');
+    badge.className = 'badge bg-primary-subtle text-primary border border-primary-subtle d-inline-flex align-items-center py-1.5 px-2.5 rounded-pill';
+    badge.style.fontSize = '0.8rem';
+    badge.innerHTML = `
+      <span>${sub.name} <small class="text-muted">(${sub.max_marks})</small></span>
+      <button type="button" class="btn-close ms-2" style="font-size: 0.55rem;" onclick="removeSubject(${idx})"></button>
+    `;
+    container.appendChild(badge);
+  });
+
+  counter.textContent = `${currentSelectedSubjects.length} subjects`;
+  jsonInput.value = JSON.stringify(currentSelectedSubjects);
+}
+
+function removeSubject(idx) {
+  currentSelectedSubjects.splice(idx, 1);
+  renderSubjectBadges();
+}
+
+function addCustomSubject() {
+  const input = document.getElementById('customSubjectInput');
+  const name = input.value.trim();
+  if (!name) return;
+
+  const exists = currentSelectedSubjects.some(s => s.name.toLowerCase() === name.toLowerCase());
+  if (!exists) {
+    currentSelectedSubjects.push({ name, max_marks: 100 });
+    renderSubjectBadges();
+  }
+  input.value = '';
+}
+
+function selectAllClasses(checked) {
+  document.querySelectorAll('.class-checkbox').forEach(chk => {
+    chk.checked = checked;
+  });
+}
+
+function selectClassesByFilter(filterKey) {
+  selectAllClasses(false);
+  document.querySelectorAll('.class-checkbox').forEach(chk => {
+    const name = chk.getAttribute('data-name');
+    let matches = false;
+
+    if (filterKey === '1-8') {
+      matches = /\b(1|2|3|4|5|6|7|8|i|ii|iii|iv|v|vi|vii|viii|nursery|lkg|ukg|kg)\b/i.test(name) && !/\b(10|11|12)\b/i.test(name);
+    } else if (filterKey === '9-10') {
+      matches = /\b(9|10|ix|x)\b/i.test(name) && !/\b(11|12|xi|xii)\b/i.test(name);
+    } else if (filterKey === '11-12') {
+      matches = /\b(11|12|xi|xii)\b/i.test(name);
+    }
+
+    if (matches) chk.checked = true;
+  });
+}
+
+function filterClassCards(query) {
+  const q = query.toLowerCase().trim();
+  document.querySelectorAll('.class-accordion-item').forEach(item => {
+    const text = item.getAttribute('data-class-name') || '';
+    if (!q || text.includes(q)) {
+      item.style.display = '';
+    } else {
+      item.style.display = 'none';
+    }
+  });
+}
+</script>

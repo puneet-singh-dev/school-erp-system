@@ -112,6 +112,8 @@ app.use(flash());
 // Global Server-Side Session Expiry Check (Inactivity & Absolute Limits)
 app.use(checkSessionExpiry);
 
+const { getSettingsSync } = require('./utils/settingsHelper');
+
 // Global locals
 app.use((req, res, next) => {
   res.locals.user = req.session ? (req.session.user || null) : null;
@@ -120,12 +122,14 @@ app.use((req, res, next) => {
   res.locals.error = req.flash('error');
   res.locals.sessionTimeoutMinutes = parseInt(process.env.SESSION_INACTIVITY_TIMEOUT_MINUTES, 10) || 15;
 
-  // School branding — available in all views
-  res.locals.schoolName = (process.env.SCHOOL_NAME && process.env.SCHOOL_NAME !== 'School ERP')
-    ? process.env.SCHOOL_NAME
-    : 'Shri Amrit Lal Smarak School And College';
-  res.locals.schoolAddress = process.env.SCHOOL_ADDRESS || 'Vijay Nagar, Karma Bazar, Prayagraj (U.P)';
-  res.locals.schoolPhone = process.env.SCHOOL_PHONE || '9129914501';
+  // School branding & settings — dynamic from database with fallbacks
+  const settings = getSettingsSync();
+  res.locals.schoolSettings = settings;
+  res.locals.schoolName = settings.school_name || (process.env.SCHOOL_NAME && process.env.SCHOOL_NAME !== 'School ERP' ? process.env.SCHOOL_NAME : 'Shri Amrit Lal Smarak School And College');
+  res.locals.schoolAddress = settings.school_address || process.env.SCHOOL_ADDRESS || 'Vijay Nagar, Karma Bazar, Prayagraj (U.P)';
+  res.locals.schoolPhone = settings.school_phone || process.env.SCHOOL_PHONE || '9129914501';
+  res.locals.academicYear = settings.academic_year || '2026-27';
+  res.locals.currencySymbol = settings.currency_symbol || 'Rs.';
   res.locals.developedBy = (process.env.DEVELOPED_BY && process.env.DEVELOPED_BY.replace(/^Developed by\s+/i, '').replace(/^Er\.\s*/i, '').trim()) || 'Puneet Singh';
   next();
 });

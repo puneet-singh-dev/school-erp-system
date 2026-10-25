@@ -18,6 +18,7 @@ const { generateReportCardPDF } = require('../utils/reportCardPdf');
 const { calculateClassRanks } = require('../utils/examRankHelper');
 const { getPendingFeeReport } = require('../utils/feeReport');
 const { generateSqlBackup } = require('../utils/dbBackup');
+const { getSettings, updateSettings } = require('../utils/settingsHelper');
 
 // Configure Multer for student profile photo uploads
 const uploadDir = path.join(__dirname, '../public/uploads/students');
@@ -674,24 +675,245 @@ router.get('/classes/student-list-pdf/:classId', async (req, res) => {
 
 // ==================== SUBJECTS ====================
 router.get('/subjects', async (req, res) => {
-  const [subjects] = await db.query(`SELECT sub.*, c.name as class_name, c.section, u.name as teacher_name
-    FROM subjects sub LEFT JOIN classes c ON sub.class_id=c.id LEFT JOIN users u ON sub.teacher_id=u.id ORDER BY c.name, sub.name`);
-  const [classes] = await db.query('SELECT * FROM classes ORDER BY name, section');
-  const [teachers] = await db.query("SELECT id, name FROM users WHERE role='teacher' ORDER BY name");
-  res.render('admin/subjects', { title: 'Subjects', subjects, classes, teachers });
+  try {
+    const [subjects] = await db.query(`SELECT sub.*, c.name as class_name, c.section, u.name as teacher_name
+      FROM subjects sub 
+      LEFT JOIN classes c ON sub.class_id=c.id 
+      LEFT JOIN users u ON sub.teacher_id=u.id 
+      ORDER BY c.name, c.section, sub.name`);
+    const [classes] = await db.query('SELECT * FROM classes ORDER BY name, section');
+    const [teachers] = await db.query("SELECT id, name FROM users WHERE role='teacher' ORDER BY name");
+
+    // Group subjects by class
+    const classSubjectsMap = {};
+    const subjectCounts = {};
+    classes.forEach(c => {
+      classSubjectsMap[c.id] = [];
+      subjectCounts[c.id] = 0;
+    });
+
+    subjects.forEach(sub => {
+      if (!classSubjectsMap[sub.class_id]) classSubjectsMap[sub.class_id] = [];
+      classSubjectsMap[sub.class_id].push(sub);
+      subjectCounts[sub.class_id] = (subjectCounts[sub.class_id] || 0) + 1;
+    });
+
+    res.render('admin/subjects', { 
+      title: 'Subjects Management', 
+      subjects, 
+      classes, 
+      teachers,
+      classSubjectsMap,
+      subjectCounts
+    });
+  } catch (err) {
+    console.error('Error loading subjects:', err);
+    req.flash('error_msg', 'Error loading subjects: ' + err.message);
+    res.redirect('/admin');
+  }
 });
 
 router.post('/subjects/add', async (req, res) => {
-  const { name, code, class_id, teacher_id, max_marks } = req.body;
-  await db.query('INSERT INTO subjects (name,code,class_id,teacher_id,max_marks) VALUES (?,?,?,?,?)', [name, code, class_id, teacher_id || null, max_marks || 100]);
-  req.flash('success_msg', 'Subject added');
-  res.redirect('/admin/subjects');
+  try {
+    const { name, code, class_id, teacher_id, max_marks } = req.body;
+    if (!name || !class_id) {
+      req.flash('error_msg', 'Subject Name and Class are required.');
+      return res.redirect('/admin/subjects');
+    }
+
+    // Check duplicate
+    const [existing] = await db.query(
+      'SELECT id FROM subjects WHERE class_id = ? AND LOWER(TRIM(name)) = LOWER(TRIM(?))',
+      [class_id, name]
+    );
+    if (existing.length) {
+      req.flash('error_msg', `Subject "${name}" already exists for this class.`);
+      return res.redirect('/admin/subjects');
+    }
+
+    await db.query(
+      'INSERT INTO subjects (name, code, class_id, teacher_id, max_marks) VALUES (?, ?, ?, ?, ?)',
+      [name.trim(), code ? code.trim() : null, class_id, teacher_id || null, parseFloat(max_marks) || 100]
+    );
+    req.flash('success_msg', `Subject "${name}" added successfully.`);
+    res.redirect('/admin/subjects');
+  } catch (err) {
+    console.error('Error adding subject:', err);
+    req.flash('error_msg', 'Error adding subject: ' + err.message);
+    res.redirect('/admin/subjects');
+  }
+});
+
+// Bulk assign subjects across multiple classes (Class 1-8, Class 9-10, Class 11-12, etc.)
+router.post('/subjects/bulk-assign', async (req, res) => {
+  try {
+    let { class_ids, subjects_json, subject_names, default_max_marks } = req.body;
+
+    // Normalize class_ids into array
+    if (!class_ids) {
+      req.flash('error_msg', 'Please select at least one class.');
+      return res.redirect('/admin/subjects');
+    }
+    if (!Array.isArray(class_ids)) {
+      class_ids = [class_ids];
+    }
+    class_ids = class_ids.map(id => parseInt(id, 10)).filter(id => !isNaN(id) && id > 0);
+
+    if (!class_ids.length) {
+      req.flash('error_msg', 'Please select valid target classes.');
+      return res.redirect('/admin/subjects');
+    }
+
+    const maxMarks = parseFloat(default_max_marks) || 100;
+    let subjectsToAssign = [];
+
+    // Check if JSON subjects payload provided
+    if (subjects_json) {
+      try {
+        const parsed = JSON.parse(subjects_json);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          subjectsToAssign = parsed.map(s => ({
+            name: (s.name || s).trim(),
+            code: s.code ? s.code.trim() : null,
+            max_marks: parseFloat(s.max_marks) || maxMarks
+          })).filter(s => s.name.length > 0);
+        }
+      } catch (pErr) {}
+    }
+
+    // Fallback to subject_names text if JSON not provided
+    if (!subjectsToAssign.length && subject_names) {
+      const lines = subject_names.split(/\r?\n|,/).map(l => l.trim()).filter(Boolean);
+      subjectsToAssign = lines.map(line => {
+        // Support optional code or max marks like: Mathematics (100) or Math [MATH01]
+        const match = line.match(/^([^(|\[]+)(?:[([](.*?)[)\]])?$/);
+        const name = match ? match[1].trim() : line;
+        const extra = match && match[2] ? match[2].trim() : null;
+        const extraNum = extra ? parseFloat(extra) : null;
+        return {
+          name,
+          code: extra && isNaN(extraNum) ? extra : null,
+          max_marks: extraNum && !isNaN(extraNum) ? extraNum : maxMarks
+        };
+      }).filter(s => s.name.length > 0);
+    }
+
+    if (!subjectsToAssign.length) {
+      req.flash('error_msg', 'Please enter or select at least one subject to assign.');
+      return res.redirect('/admin/subjects');
+    }
+
+    let addedCount = 0;
+    let skippedCount = 0;
+
+    for (const classId of class_ids) {
+      for (const sub of subjectsToAssign) {
+        const [existing] = await db.query(
+          'SELECT id FROM subjects WHERE class_id = ? AND LOWER(TRIM(name)) = LOWER(TRIM(?))',
+          [classId, sub.name]
+        );
+
+        if (!existing.length) {
+          await db.query(
+            'INSERT INTO subjects (name, code, class_id, max_marks) VALUES (?, ?, ?, ?)',
+            [sub.name, sub.code, classId, sub.max_marks]
+          );
+          addedCount++;
+        } else {
+          skippedCount++;
+        }
+      }
+    }
+
+    req.flash('success_msg', `Bulk Assignment Complete! Added ${addedCount} subjects across ${class_ids.length} classes (${skippedCount} duplicates skipped).`);
+    res.redirect('/admin/subjects');
+  } catch (err) {
+    console.error('Error in bulk subjects assign:', err);
+    req.flash('error_msg', 'Error in bulk subjects assign: ' + err.message);
+    res.redirect('/admin/subjects');
+  }
+});
+
+// Copy all subjects from a source class to one or more target classes
+router.post('/subjects/copy', async (req, res) => {
+  try {
+    const { source_class_id, target_class_ids } = req.body;
+    const sourceId = parseInt(source_class_id, 10);
+    
+    let targets = [];
+    if (Array.isArray(target_class_ids)) targets = target_class_ids;
+    else if (target_class_ids) targets = [target_class_ids];
+    targets = targets.map(id => parseInt(id, 10)).filter(id => !isNaN(id) && id > 0 && id !== sourceId);
+
+    if (!sourceId || !targets.length) {
+      req.flash('error_msg', 'Please choose a valid source class and at least one different target class.');
+      return res.redirect('/admin/subjects');
+    }
+
+    const [sourceSubs] = await db.query('SELECT name, code, max_marks FROM subjects WHERE class_id = ?', [sourceId]);
+    if (!sourceSubs.length) {
+      req.flash('error_msg', 'The chosen source class has no subjects to copy.');
+      return res.redirect('/admin/subjects');
+    }
+
+    let copiedCount = 0;
+    let skippedCount = 0;
+
+    for (const targetId of targets) {
+      for (const s of sourceSubs) {
+        const [existing] = await db.query(
+          'SELECT id FROM subjects WHERE class_id = ? AND LOWER(TRIM(name)) = LOWER(TRIM(?))',
+          [targetId, s.name]
+        );
+        if (!existing.length) {
+          await db.query(
+            'INSERT INTO subjects (name, code, class_id, max_marks) VALUES (?, ?, ?, ?)',
+            [s.name, s.code, targetId, s.max_marks || 100]
+          );
+          copiedCount++;
+        } else {
+          skippedCount++;
+        }
+      }
+    }
+
+    req.flash('success_msg', `Successfully copied ${copiedCount} subjects across ${targets.length} target classes (${skippedCount} already existed).`);
+    res.redirect('/admin/subjects');
+  } catch (err) {
+    console.error('Error copying subjects:', err);
+    req.flash('error_msg', 'Error copying subjects: ' + err.message);
+    res.redirect('/admin/subjects');
+  }
+});
+
+// Bulk remove all subjects for a specific class
+router.post('/subjects/bulk-delete-class', async (req, res) => {
+  try {
+    const classId = parseInt(req.body.class_id, 10);
+    if (!classId) {
+      req.flash('error_msg', 'Invalid class selected.');
+      return res.redirect('/admin/subjects');
+    }
+    const [result] = await db.query('DELETE FROM subjects WHERE class_id = ?', [classId]);
+    req.flash('success_msg', `Removed ${result.affectedRows} subjects for the selected class.`);
+    res.redirect('/admin/subjects');
+  } catch (err) {
+    console.error('Error deleting class subjects:', err);
+    req.flash('error_msg', 'Error deleting class subjects: ' + err.message);
+    res.redirect('/admin/subjects');
+  }
 });
 
 router.post('/subjects/delete/:id', async (req, res) => {
-  await db.query('DELETE FROM subjects WHERE id=?', [req.params.id]);
-  req.flash('success_msg', 'Subject deleted');
-  res.redirect('/admin/subjects');
+  try {
+    await db.query('DELETE FROM subjects WHERE id=?', [req.params.id]);
+    req.flash('success_msg', 'Subject deleted');
+    res.redirect('/admin/subjects');
+  } catch (err) {
+    console.error('Error deleting subject:', err);
+    req.flash('error_msg', 'Error deleting subject: ' + err.message);
+    res.redirect('/admin/subjects');
+  }
 });
 
 // ==================== ATTENDANCE ====================
@@ -1827,6 +2049,30 @@ router.post('/change-password', async (req, res) => {
     console.error('Admin change password error:', err);
     req.flash('error_msg', 'Error updating password: ' + err.message);
     res.redirect('/admin/change-password');
+  }
+});
+
+// ==================== SETTINGS ====================
+router.get('/settings', async (req, res) => {
+  try {
+    const settings = await getSettings(true);
+    res.render('admin/settings', { title: 'School & System Settings', settings });
+  } catch (err) {
+    console.error('Error loading settings:', err);
+    req.flash('error_msg', 'Error loading settings: ' + err.message);
+    res.redirect('/admin');
+  }
+});
+
+router.post('/settings/save', async (req, res) => {
+  try {
+    await updateSettings(req.body);
+    req.flash('success_msg', 'School & System Settings updated successfully!');
+    res.redirect('/admin/settings');
+  } catch (err) {
+    console.error('Error saving settings:', err);
+    req.flash('error_msg', 'Error saving settings: ' + err.message);
+    res.redirect('/admin/settings');
   }
 });
 

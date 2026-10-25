@@ -31,9 +31,14 @@
 <% } else { %>
 <!-- Quick Generator & Backup bar -->
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-  <a href="/admin/backup/download" class="btn btn-outline-success btn-sm shadow-sm fw-semibold">
-    <i class="fa-solid fa-database me-1"></i>Download Database Backup (.sql)
-  </a>
+  <div class="d-flex gap-2">
+    <a href="/admin/settings" class="btn btn-outline-primary btn-sm shadow-sm fw-semibold">
+      <i class="fa-solid fa-gear me-1"></i>School Settings
+    </a>
+    <a href="/admin/backup/download" class="btn btn-outline-success btn-sm shadow-sm fw-semibold">
+      <i class="fa-solid fa-database me-1"></i>Database Backup (.sql)
+    </a>
+  </div>
   <form action="/admin/demo/generate" method="POST" class="m-0">
     <button type="submit" class="btn btn-outline-primary btn-sm shadow-sm">
       <i class="fa-solid fa-flask-vial me-1"></i>Load Demo Data (10-15 students/class & teachers)
