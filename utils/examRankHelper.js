@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const { isSubjectApplicableToStudent } = require('./csvMarksHelper');
 
 /**
  * Calculates student ranks / positions (1st, 2nd, 3rd Position) for a given class and exam (or consolidated annual exams)
@@ -10,7 +11,7 @@ async function calculateClassRanks(classId, targetExamId = null, isConsolidated 
   if (!classId) return { ranksMap: {}, topThree: [] };
 
   const [students] = await db.query(
-    `SELECT s.id, u.name, s.admission_no, s.roll_number
+    `SELECT s.id, u.name, s.admission_no, s.roll_number, s.optional_subject
      FROM students s
      JOIN users u ON s.user_id = u.id
      WHERE s.class_id = ?
@@ -20,6 +21,11 @@ async function calculateClassRanks(classId, targetExamId = null, isConsolidated 
   if (!students.length) return { ranksMap: {}, topThree: [] };
 
   const [subjects] = await db.query('SELECT * FROM subjects WHERE class_id = ?', [classId]);
+  const subjectMap = {};
+  subjects.forEach(sub => { subjectMap[sub.id] = sub; });
+  const studentMap = {};
+  students.forEach(s => { studentMap[s.id] = s; });
+
   const studentIds = students.map(s => s.id);
 
   let resultsQuery = `SELECT * FROM results WHERE student_id IN (?)`;
@@ -38,6 +44,7 @@ async function calculateClassRanks(classId, targetExamId = null, isConsolidated 
       name: s.name,
       admission_no: s.admission_no,
       roll_number: s.roll_number,
+      optional_subject: s.optional_subject,
       totalObtained: 0,
       totalMax: 0,
       hasFailedSubject: false,
@@ -46,14 +53,21 @@ async function calculateClassRanks(classId, targetExamId = null, isConsolidated 
   });
 
   results.forEach(r => {
-    if (studentStats[r.student_id]) {
+    const st = studentStats[r.student_id];
+    if (st) {
+      const sub = subjectMap[r.subject_id];
+      // Filter out non-applicable optional subjects (e.g. Sanskrit for a Drawing student)
+      if (sub && !isSubjectApplicableToStudent(sub.name, st.optional_subject)) {
+        return;
+      }
+
       const obt = parseFloat(r.marks_obtained) || 0;
-      const max = parseFloat(r.max_marks) || 100;
-      studentStats[r.student_id].totalObtained += obt;
-      studentStats[r.student_id].totalMax += max;
-      studentStats[r.student_id].enteredSubjectsCount++;
+      const max = parseFloat(r.max_marks) || (sub ? parseFloat(sub.max_marks) : 100);
+      st.totalObtained += obt;
+      st.totalMax += max;
+      st.enteredSubjectsCount++;
       if (max > 0 && (obt / max) < 0.33) {
-        studentStats[r.student_id].hasFailedSubject = true;
+        st.hasFailedSubject = true;
       }
     }
   });

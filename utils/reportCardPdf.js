@@ -2,6 +2,7 @@ const PDFDocument = require('pdfkit');
 const path = require('path');
 const fs = require('fs');
 const moment = require('moment');
+const { isSubjectApplicableToStudent } = require('./csvMarksHelper');
 
 /**
  * Generates official A4 Student Progress Report Card
@@ -10,6 +11,8 @@ const moment = require('moment');
  * 2. Single Term Examination Report Card
  */
 function generateReportCardPDF(res, student, currentExam, subjects, currentResults, classRanks = {}, allExams = [], allResults = []) {
+  // Filter subjects based on student's UP Board optional subject
+  const applicableSubjects = (subjects || []).filter(sub => isSubjectApplicableToStudent(sub.name, student.optional_subject));
   const doc = new PDFDocument({ size: 'A4', margin: 30 });
   const filename = `report_card_${student.admission_no}_${currentExam ? currentExam.name.replace(/\s+/g, '_') : 'annual'}.pdf`;
 
@@ -157,7 +160,7 @@ function generateReportCardPDF(res, student, currentExam, subjects, currentResul
     termsToDisplay.forEach(t => { termTotals[t.key] = { obt: 0, max: 0 }; });
 
     // Subject Rows
-    subjects.forEach((sub, sIdx) => {
+    applicableSubjects.forEach((sub, sIdx) => {
       const isEven = sIdx % 2 === 0;
       doc.rect(30, tableY, 535, rowH).fillAndStroke(isEven ? '#f8fafc' : '#ffffff', '#cbd5e1');
 
@@ -290,7 +293,7 @@ function generateReportCardPDF(res, student, currentExam, subjects, currentResul
     let totalMax = 0;
     let anySubjectFailed = false;
 
-    subjects.forEach((sub, sIdx) => {
+    applicableSubjects.forEach((sub, sIdx) => {
       const isEven = sIdx % 2 === 0;
       doc.rect(30, tableY, 535, rowH).fillAndStroke(isEven ? '#f8fafc' : '#ffffff', '#cbd5e1');
 

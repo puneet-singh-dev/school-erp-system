@@ -1,78 +1,149 @@
-<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+<%
+function isSubjectApplicable(subName, optSub) {
+  if (!optSub || !subName) return true;
+  const s = subName.toLowerCase();
+  const o = optSub.toLowerCase();
+  if (/drawing|art|chitrakala/i.test(s) && /sanskrit/i.test(o)) return false;
+  if (/sanskrit/i.test(s) && /drawing|art|chitrakala/i.test(o)) return false;
+  if (/bio|biology/i.test(s) && /math/i.test(o)) return false;
+  if (/math/i.test(s) && !/applied/i.test(s) && /bio/i.test(o)) return false;
+  return true;
+}
+%>
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
   <div>
     <h5 class="fw-bold mb-1"><i class="fa-solid fa-pen text-primary me-2"></i>Enter Marks: <%- exam.name %></h5>
-    <span class="text-muted small">Passing Criteria: <strong>Minimum 33%</strong> in each subject &bull; Session 2026-27</span>
+    <span class="text-muted small">Academic Session 2026-27 &bull; Minimum Passing: <strong>33%</strong></span>
   </div>
-  <div class="d-flex gap-2">
-    <a href="/admin/results/class-marks?class_id=<%- exam.class_id %>&exam_id=<%- exam.id %>" class="btn btn-outline-primary btn-sm">
-      <i class="fa-solid fa-table-list me-1"></i>View Class Broadsheet & Positions
+  <div class="d-flex gap-2 flex-wrap">
+    <a href="/admin/results/template/<%- exam.id %>" class="btn btn-outline-success btn-sm shadow-xs fw-semibold" title="Download Excel-compatible CSV pre-filled with students">
+      <i class="fa-solid fa-file-excel me-1"></i>Download CSV Template
     </a>
-    <a href="/admin/results" class="btn btn-outline-secondary btn-sm">Back</a>
+    <button type="button" class="btn btn-outline-primary btn-sm shadow-xs fw-semibold" data-bs-toggle="modal" data-bs-target="#uploadCsvModal">
+      <i class="fa-solid fa-file-arrow-up me-1"></i>Upload CSV Marks
+    </button>
+    <a href="/admin/results/class-marks?class_id=<%- exam.class_id %>&exam_id=<%- exam.id %>" class="btn btn-outline-secondary btn-sm shadow-xs">
+      <i class="fa-solid fa-table-list me-1"></i>Broadsheet
+    </a>
+    <a href="/admin/results" class="btn btn-outline-secondary btn-sm shadow-xs">Back</a>
   </div>
 </div>
 
-<div class="alert alert-info py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
+<div class="alert alert-info py-2 d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
   <div>
     <strong>Class:</strong> <%- exam.class_name %> &nbsp;|&nbsp;
     <strong>Exam:</strong> <%- exam.name %> &nbsp;|&nbsp;
     <strong>Date:</strong> <%- exam.exam_date ? new Date(exam.exam_date).toLocaleDateString('en-IN') : 'N/A' %>
   </div>
-  <span class="badge bg-warning text-dark"><i class="fa-solid fa-circle-exclamation me-1"></i>Min Passing: 33% of Max Marks</span>
+  <div class="d-flex align-items-center gap-2">
+    <span class="badge bg-warning text-dark"><i class="fa-solid fa-circle-exclamation me-1"></i>Pass: 33%</span>
+    <span class="badge bg-light text-dark border"><i class="fa-solid fa-keyboard me-1"></i>Enter key: Next student</span>
+  </div>
 </div>
 
-<form action="/admin/results/save/<%- exam.id %>" method="POST">
+<!-- ==================== SUBJECT FOCUS FILTER BAR ==================== -->
+<div class="card border-0 shadow-sm mb-3 bg-light">
+  <div class="card-body p-2 d-flex align-items-center gap-2 flex-wrap">
+    <span class="small fw-bold text-muted me-1 text-uppercase" style="font-size: 0.75rem;">
+      <i class="fa-solid fa-filter me-1"></i>Mode / Focus:
+    </span>
+    <button type="button" class="btn btn-sm btn-primary filter-subject-btn active fw-semibold" data-sub-id="all" onclick="filterBySubject('all', this)">
+      <i class="fa-solid fa-table-cells me-1"></i>All Subjects (Grid Mode)
+    </button>
+    <% subjects.forEach(sub => { %>
+    <button type="button" class="btn btn-sm btn-white border filter-subject-btn shadow-xs" data-sub-id="<%- sub.id %>" onclick="filterBySubject('<%- sub.id %>', this)">
+      <%- sub.name %> <small class="text-muted">(Max: <%- sub.max_marks %>)</small>
+    </button>
+    <% }) %>
+  </div>
+</div>
+
+<form action="/admin/results/save/<%- exam.id %>" method="POST" id="marksEntryForm">
   <div class="card shadow-sm border-0">
     <div class="card-body p-0">
       <div class="table-responsive">
-        <table class="table table-bordered align-middle mb-0 text-center" style="font-size: 0.88rem;">
+        <table class="table table-bordered align-middle mb-0 text-center" id="marksTable" style="font-size: 0.88rem;">
           <thead class="table-dark">
             <tr>
-              <th style="min-width:160px" class="text-start">Student Name</th>
+              <th style="min-width: 170px;" class="text-start">Student Name</th>
+              <th style="width: 130px;">Optional Subject</th>
               <% subjects.forEach(sub => { %>
-              <th style="min-width:130px">
+              <th class="subject-col sub-col-<%- sub.id %>" style="min-width: 135px;" data-sub-id="<%- sub.id %>">
                 <div><%- sub.name %></div>
-                <small class="text-warning fw-normal" style="font-size: 0.72rem;">Max: <%- sub.max_marks %> &bull; Pass: <%- Math.ceil(sub.max_marks * 0.33) %></small>
+                <small class="text-warning fw-normal" style="font-size: 0.72rem;">
+                  Max: <%- sub.max_marks %> &bull; Pass: <%- Math.ceil(sub.max_marks * 0.33) %>
+                </small>
               </th>
               <% }) %>
-              <th style="width: 130px;">Report Cards</th>
+              <th style="width: 110px;">Report Cards</th>
             </tr>
           </thead>
           <tbody>
-            <% students.forEach(s => { %>
-            <tr>
+            <% students.forEach((s, sIdx) => { %>
+            <tr class="student-row" data-student-id="<%- s.id %>">
               <td class="text-start">
-                <div class="fw-semibold"><%- s.name %></div>
-                <small class="text-muted">Adm: <%- s.admission_no %> | Roll: <%- s.roll_number || '-' %></small>
+                <div class="fw-semibold text-dark"><%- s.name %></div>
+                <small class="text-muted">Adm: <strong><%- s.admission_no %></strong> | Roll: <strong><%- s.roll_number || '-' %></strong></small>
               </td>
-              <% subjects.forEach(sub => { %>
-              <% 
-                const existingResult = resultsMap[`${s.id}_${sub.id}`]; 
-                const marksVal = existingResult ? existingResult.marks_obtained : '';
-                const isFail = marksVal !== '' && (parseFloat(marksVal) / sub.max_marks) < 0.33;
-              %>
               <td>
-                <input type="number" name="marks[<%- s.id %>_<%- sub.id %>]"
-                  class="form-control form-control-sm text-center marks-input <%- isFail ? 'border-danger text-danger bg-danger-subtle' : '' %>"
-                  value="<%- marksVal %>"
-                  min="0" max="<%- sub.max_marks %>" step="0.5"
-                  data-max="<%- sub.max_marks %>"
-                  placeholder="0-<%- sub.max_marks %>"
-                  oninput="validateMarksInput(this)">
-                <div class="mt-1 grade-tag">
-                  <% if(existingResult) { %>
-                    <small class="badge <%- isFail ? 'bg-danger' : 'bg-success' %>" style="font-size: 0.7rem;">
-                      <%- isFail ? 'Fail (<33%)' : existingResult.grade %>
-                    </small>
-                  <% } %>
-                </div>
+                <% if(s.optional_subject && s.optional_subject !== 'None') { %>
+                  <span class="badge bg-primary-subtle text-primary border border-primary-subtle small">
+                    <%- s.optional_subject %>
+                  </span>
+                <% } else { %>
+                  <span class="text-muted small">-</span>
+                <% } %>
+              </td>
+
+              <% subjects.forEach((sub, subIdx) => { 
+                   const isApp = isSubjectApplicable(sub.name, s.optional_subject);
+                   const existingResult = resultsMap[`${s.id}_${sub.id}`]; 
+                   const marksVal = existingResult ? existingResult.marks_obtained : '';
+                   const isFail = marksVal !== '' && (parseFloat(marksVal) / sub.max_marks) < 0.33;
+              %>
+              <td class="subject-col sub-col-<%- sub.id %>" data-sub-id="<%- sub.id %>">
+                <% if(isApp) { %>
+                  <div class="input-group input-group-sm">
+                    <input type="number" 
+                      name="marks[<%- s.id %>_<%- sub.id %>]"
+                      class="form-control form-control-sm text-center marks-input <%- isFail ? 'border-danger text-danger bg-danger-subtle' : '' %>"
+                      value="<%- marksVal %>"
+                      min="0" max="<%- sub.max_marks %>" step="0.5"
+                      data-max="<%- sub.max_marks %>"
+                      data-row="<%- sIdx %>"
+                      data-col="<%- subIdx %>"
+                      placeholder="0-<%- sub.max_marks %>"
+                      oninput="validateMarksInput(this)"
+                      onkeydown="handleKeyNavigation(event, this)">
+                    <button type="button" class="btn btn-outline-secondary btn-xs py-0 px-1" title="Mark Absent (0)" onclick="markAbsent(this)">
+                      AB
+                    </button>
+                  </div>
+                  <div class="mt-1 grade-tag">
+                    <% if(existingResult) { %>
+                      <small class="badge <%- isFail ? 'bg-danger' : 'bg-success' %>" style="font-size: 0.68rem;">
+                        <%- isFail ? 'Fail (<33%)' : existingResult.grade %>
+                      </small>
+                    <% } %>
+                  </div>
+                <% } else { %>
+                  <!-- Subject not opted by this UP Board student -->
+                  <div class="py-1">
+                    <span class="badge bg-light text-muted border py-1 px-2" style="font-size: 0.72rem;" title="Student opted for <%- s.optional_subject %>">
+                      <i class="fa-solid fa-ban me-1"></i>N/A (Opted <%- s.optional_subject %>)
+                    </span>
+                  </div>
+                <% } %>
               </td>
               <% }) %>
+
               <td>
                 <div class="btn-group btn-group-sm">
-                  <a href="/admin/results/report-card/<%- s.id %>/<%- exam.id %>" target="_blank" class="btn btn-sm btn-outline-primary" title="Print Current Exam Report Card">
+                  <a href="/admin/results/report-card/<%- s.id %>/<%- exam.id %>" target="_blank" class="btn btn-sm btn-outline-primary" title="Print Current Term Card">
                     <i class="fa-solid fa-file-pdf"></i>
                   </a>
-                  <a href="/admin/results/report-card/<%- s.id %>/<%- exam.id %>?consolidated=1" target="_blank" class="btn btn-sm btn-outline-success" title="Print Annual Consolidated Report Card (1st, 2nd, 3rd Terms)">
+                  <a href="/admin/results/report-card/<%- s.id %>/<%- exam.id %>?consolidated=1" target="_blank" class="btn btn-sm btn-outline-success" title="Print Consolidated Annual Card (1st, 2nd, 3rd Terms)">
                     <i class="fa-solid fa-layer-group"></i>
                   </a>
                 </div>
@@ -83,18 +154,98 @@
         </table>
       </div>
     </div>
-    <div class="card-footer d-flex justify-content-between align-items-center">
-      <span class="text-muted small"><i class="fa-solid fa-info-circle me-1"></i>Students scoring &lt; 33% in any subject are automatically flagged as Fail.</span>
-      <button type="submit" class="btn btn-primary px-4 fw-semibold"><i class="fa-solid fa-save me-1"></i>Save All Results</button>
+    <div class="card-footer bg-light p-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <div class="small text-muted">
+        <i class="fa-solid fa-lightbulb text-warning me-1"></i>
+        <strong>Pro-tip:</strong> Use the <strong>Enter key</strong> to jump down to the next student immediately.
+      </div>
+      <div class="d-flex gap-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="markAllBlanksAbsent()">
+          <i class="fa-solid fa-user-xmark me-1"></i>Mark Empty as Absent
+        </button>
+        <button type="submit" class="btn btn-primary px-4 fw-bold shadow-sm">
+          <i class="fa-solid fa-floppy-disk me-1"></i>Save All Results
+        </button>
+      </div>
     </div>
   </div>
 </form>
 
+<!-- ==================== MODAL: UPLOAD CSV MARKS ==================== -->
+<div class="modal fade" id="uploadCsvModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form action="/admin/results/upload-csv/<%- exam.id %>" method="POST" enctype="multipart/form-data">
+        <div class="modal-header bg-primary text-white">
+          <h6 class="modal-title fw-bold"><i class="fa-solid fa-file-arrow-up me-2"></i>Upload Marks via Excel / CSV</h6>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted small mb-3">
+            Quickly import marks in bulk for the entire class using a spreadsheet.
+          </p>
+
+          <div class="p-3 bg-light rounded border mb-3">
+            <h6 class="fw-bold mb-1 small text-dark"><i class="fa-solid fa-circle-info text-info me-1"></i>Instructions:</h6>
+            <ol class="small mb-0 ps-3">
+              <li>Click <strong>"Download CSV Template"</strong> above to get the formatted file.</li>
+              <li>Fill in the scores in Excel or Google Sheets (leave un-opted subjects as N/A).</li>
+              <li>Save and upload the updated file below.</li>
+            </ol>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-bold">Select CSV File *</label>
+            <input type="file" name="csv_file" class="form-control" accept=".csv" required>
+            <div class="form-text">File must be in .csv format.</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary fw-bold">
+            <i class="fa-solid fa-cloud-arrow-up me-1"></i>Import Marks
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 <script>
+// Filter table by a single subject or all subjects
+function filterBySubject(subId, btn) {
+  document.querySelectorAll('.filter-subject-btn').forEach(b => {
+    b.classList.remove('btn-primary', 'active', 'fw-semibold');
+    b.classList.add('btn-white');
+  });
+  btn.classList.remove('btn-white');
+  btn.classList.add('btn-primary', 'active', 'fw-semibold');
+
+  const allCols = document.querySelectorAll('.subject-col');
+  if (subId === 'all') {
+    allCols.forEach(col => col.style.display = '');
+  } else {
+    allCols.forEach(col => {
+      if (col.getAttribute('data-sub-id') === String(subId)) {
+        col.style.display = '';
+      } else {
+        col.style.display = 'none';
+      }
+    });
+  }
+
+  // Focus first visible input
+  setTimeout(() => {
+    const firstInput = document.querySelector('.marks-input:not([disabled])');
+    if (firstInput && firstInput.offsetParent !== null) firstInput.focus();
+  }, 50);
+}
+
+// Live Validation for marks inputs (Min 33% passing rule)
 function validateMarksInput(input) {
   const max = parseFloat(input.getAttribute('data-max')) || 100;
   const val = parseFloat(input.value);
-  const tagDiv = input.parentElement.querySelector('.grade-tag');
+  const tagDiv = input.parentElement.parentElement.querySelector('.grade-tag');
   
   if (isNaN(val) || input.value === '') {
     input.classList.remove('border-danger', 'text-danger', 'bg-danger-subtle', 'border-success');
@@ -102,16 +253,77 @@ function validateMarksInput(input) {
     return;
   }
   
-  const pct = (val / max) * 100;
+  if (val > max) {
+    input.value = max;
+  }
+
+  const pct = (parseFloat(input.value) / max) * 100;
   if (pct < 33) {
     input.classList.add('border-danger', 'text-danger', 'bg-danger-subtle');
     input.classList.remove('border-success');
-    if (tagDiv) tagDiv.innerHTML = '<small class="badge bg-danger" style="font-size: 0.7rem;">Fail (<33%)</small>';
+    if (tagDiv) tagDiv.innerHTML = '<small class="badge bg-danger" style="font-size: 0.68rem;">Fail (<33%)</small>';
   } else {
     input.classList.remove('border-danger', 'text-danger', 'bg-danger-subtle');
     input.classList.add('border-success');
     const gr = pct >= 90 ? 'A+' : pct >= 80 ? 'A' : pct >= 70 ? 'B' : pct >= 60 ? 'C' : pct >= 50 ? 'D' : 'E';
-    if (tagDiv) tagDiv.innerHTML = '<small class="badge bg-success" style="font-size: 0.7rem;">Grade: ' + gr + '</small>';
+    if (tagDiv) tagDiv.innerHTML = '<small class="badge bg-success" style="font-size: 0.68rem;">Grade: ' + gr + '</small>';
   }
+}
+
+// Quick Absent mark
+function markAbsent(btn) {
+  const input = btn.parentElement.querySelector('.marks-input');
+  if (input) {
+    input.value = '0';
+    validateMarksInput(input);
+    const tagDiv = input.parentElement.parentElement.querySelector('.grade-tag');
+    if (tagDiv) tagDiv.innerHTML = '<small class="badge bg-secondary" style="font-size: 0.68rem;">Absent (0)</small>';
+    // Auto advance to next student
+    advanceToNextRow(input);
+  }
+}
+
+// Keyboard navigation (Enter key moves down to next student row)
+function handleKeyNavigation(e, input) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    advanceToNextRow(input);
+  } else if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    advanceToNextRow(input);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    advanceToPrevRow(input);
+  }
+}
+
+function advanceToNextRow(input) {
+  const curRow = parseInt(input.getAttribute('data-row'), 10);
+  const curCol = parseInt(input.getAttribute('data-col'), 10);
+  const nextInput = document.querySelector(`.marks-input[data-col="${curCol}"][data-row="${curRow + 1}"]`);
+  if (nextInput && nextInput.offsetParent !== null) {
+    nextInput.focus();
+    nextInput.select();
+  }
+}
+
+function advanceToPrevRow(input) {
+  const curRow = parseInt(input.getAttribute('data-row'), 10);
+  const curCol = parseInt(input.getAttribute('data-col'), 10);
+  const prevInput = document.querySelector(`.marks-input[data-col="${curCol}"][data-row="${curRow - 1}"]`);
+  if (prevInput && prevInput.offsetParent !== null) {
+    prevInput.focus();
+    prevInput.select();
+  }
+}
+
+function markAllBlanksAbsent() {
+  if (!confirm('Mark all currently blank visible subject inputs as Absent (0)?')) return;
+  document.querySelectorAll('.marks-input').forEach(inp => {
+    if (inp.offsetParent !== null && (inp.value === '' || inp.value === null)) {
+      inp.value = '0';
+      validateMarksInput(inp);
+    }
+  });
 }
 </script>

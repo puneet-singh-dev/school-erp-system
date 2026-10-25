@@ -133,6 +133,7 @@ async function ensureSchema() {
         uses_transport BOOLEAN DEFAULT FALSE,
         transport_route VARCHAR(150),
         transport_fee DECIMAL(10,2) DEFAULT 0.00,
+        optional_subject VARCHAR(100) NULL,
         admission_date DATE DEFAULT (CURRENT_DATE),
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
         FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE SET NULL
@@ -272,7 +273,8 @@ async function ensureSchema() {
       { name: 'previous_balance_remarks', def: 'VARCHAR(255) NULL' },
       { name: 'uses_transport', def: 'BOOLEAN DEFAULT FALSE' },
       { name: 'transport_route', def: 'VARCHAR(150) NULL' },
-      { name: 'transport_fee', def: 'DECIMAL(10,2) DEFAULT 0.00' }
+      { name: 'transport_fee', def: 'DECIMAL(10,2) DEFAULT 0.00' },
+      { name: 'optional_subject', def: 'VARCHAR(100) NULL' }
     ];
 
     for (const col of studentColumns) {

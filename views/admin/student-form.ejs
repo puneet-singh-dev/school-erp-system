@@ -132,6 +132,34 @@
           <label class="form-label">Admission Date</label>
           <input type="date" name="admission_date" class="form-control" value="<%- student && student.admission_date ? new Date(student.admission_date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0] %>">
         </div>
+
+        <!-- Optional Subject Selection for UP Board (Class 9, 10, 11, 12) -->
+        <div class="col-md-8" id="optionalSubjectContainer">
+          <label class="form-label fw-semibold">
+            <i class="fa-solid fa-shapes text-primary me-1"></i>Optional Subject (UP Board)
+            <span class="badge bg-warning text-dark ms-1" id="optionalSubjectBadge">For Class 9, 10, 11, 12</span>
+          </label>
+          <select name="optional_subject" id="optionalSubjectSelect" class="form-select">
+            <option value="">-- Select Optional Subject --</option>
+            <optgroup label="Class 9 &amp; 10 (High School)">
+              <option value="Drawing" <%- student && /drawing|art|chitrakala/i.test(student.optional_subject || '') ? 'selected' : '' %>>Drawing / Art (चित्रकला)</option>
+              <option value="Sanskrit" <%- student && /sanskrit/i.test(student.optional_subject || '') ? 'selected' : '' %>>Sanskrit (संस्कृत)</option>
+              <option value="Commerce" <%- student && /commerce/i.test(student.optional_subject || '') ? 'selected' : '' %>>Commerce (वाणिज्य)</option>
+              <option value="Computer" <%- student && /computer/i.test(student.optional_subject || '') ? 'selected' : '' %>>Computer / IT</option>
+            </optgroup>
+            <optgroup label="Class 11 &amp; 12 (Intermediate)">
+              <option value="Mathematics" <%- student && (/math/i.test(student.optional_subject || '') && !/applied/i.test(student.optional_subject || '')) ? 'selected' : '' %>>Mathematics (गणित)</option>
+              <option value="Biology" <%- student && /bio|biology/i.test(student.optional_subject || '') ? 'selected' : '' %>>Biology (जीव विज्ञान)</option>
+              <option value="Commerce with Math" <%- student && /commerce.*math/i.test(student.optional_subject || '') ? 'selected' : '' %>>Commerce with Mathematics</option>
+              <option value="Commerce with IP" <%- student && /commerce.*ip/i.test(student.optional_subject || '') ? 'selected' : '' %>>Commerce with IP / PE</option>
+              <option value="Arts / Humanities" <%- student && /arts|humanities/i.test(student.optional_subject || '') ? 'selected' : '' %>>Arts / Humanities</option>
+            </optgroup>
+            <option value="None" <%- student && student.optional_subject === 'None' ? 'selected' : '' %>>None / Not Applicable (Class 1-8)</option>
+          </select>
+          <div class="form-text small" id="optionalSubjectHint">
+            <strong>Class 9 &amp; 10:</strong> Choose <em>Drawing (Art)</em> or <em>Sanskrit</em>. &bull; <strong>Class 11 &amp; 12:</strong> Choose <em>Mathematics</em> or <em>Biology</em>.
+          </div>
+        </div>
       </div>
 
       <!-- Parents & Guardian Information -->
@@ -239,7 +267,35 @@ function toggleTransportFields(val) {
   }
 }
 
+function updateOptionalSubjectHint(classSelectEl) {
+  const selectedText = classSelectEl && classSelectEl.options[classSelectEl.selectedIndex] ? classSelectEl.options[classSelectEl.selectedIndex].text.toLowerCase() : '';
+  const badge = document.getElementById('optionalSubjectBadge');
+  const hint = document.getElementById('optionalSubjectHint');
+  const optSelect = document.getElementById('optionalSubjectSelect');
+  if (!badge || !hint || !optSelect) return;
+
+  if (/\b(9|10|ix|x)\b/i.test(selectedText) && !/\b(11|12|xi|xii)\b/i.test(selectedText)) {
+    badge.className = 'badge bg-primary text-white ms-1';
+    badge.textContent = 'Required for Class 9 & 10 (Drawing or Sanskrit)';
+    hint.innerHTML = '<span class="text-primary fw-bold"><i class="fa-solid fa-circle-info me-1"></i>UP Board High School Rule:</span> Choose <strong>Drawing / Art (चित्रकला)</strong> or <strong>Sanskrit (संस्कृत)</strong>.';
+  } else if (/\b(11|12|xi|xii)\b/i.test(selectedText)) {
+    badge.className = 'badge bg-success text-white ms-1';
+    badge.textContent = 'Required for Class 11 & 12 (Math or Biology)';
+    hint.innerHTML = '<span class="text-success fw-bold"><i class="fa-solid fa-circle-info me-1"></i>UP Board Intermediate Rule:</span> Choose <strong>Mathematics (गणित)</strong> or <strong>Biology (जीव विज्ञान)</strong>.';
+  } else if (selectedText) {
+    badge.className = 'badge bg-light text-muted border ms-1';
+    badge.textContent = 'Not required for Class 1 to 8';
+    hint.innerHTML = '<span class="text-muted">All subjects are compulsory in Class 1 to 8 common curriculum. Optional subject set to None.</span>';
+  }
+}
+
 document.addEventListener('DOMContentLoaded', function () {
+  const clsSel = document.getElementById('classSelect');
+  if (clsSel) {
+    clsSel.addEventListener('change', function () { updateOptionalSubjectHint(this); });
+    updateOptionalSubjectHint(clsSel);
+  }
+});
   const feeInp = document.getElementById('transportFeeInput');
   const routeInp = document.getElementById('transportRouteInput');
   const select = document.getElementById('usesTransportSelect');

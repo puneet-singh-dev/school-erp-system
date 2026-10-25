@@ -1,6 +1,7 @@
 const PDFDocument = require('pdfkit');
 const path = require('path');
 const fs = require('fs');
+const { isSubjectApplicableToStudent } = require('./csvMarksHelper');
 
 /**
  * Generates an A4 Landscape Tabulation Sheet / Class-wise Marks Broadsheet PDF
@@ -112,16 +113,21 @@ function generateClassMarksPDF(res, selectedClass, selectedExam, students, subje
     doc.font('Helvetica-Bold').text(s.name, x + 4, curY + 4, { width: colNameW - 8, align: 'left' }).font('Helvetica'); x += colNameW;
 
     subjects.forEach(sub => {
-      const res = marksMap[`${s.id}_${sub.id}`];
-      const marks = res ? parseFloat(res.marks_obtained) : null;
-      if (marks !== null) {
-        totalObt += marks;
-        totalMax += sub.max_marks;
-        if ((marks / sub.max_marks) * 100 < 33) isPass = false;
-        doc.text(marks.toFixed(1), x, curY + 4, { width: subColW, align: 'center' });
+      const isApp = isSubjectApplicableToStudent(sub.name, s.optional_subject);
+      if (!isApp) {
+        doc.fillColor('#94a3b8').fontSize(6).text('N/A', x, curY + 4, { width: subColW, align: 'center' }).fillColor('#000').fontSize(7);
       } else {
-        totalMax += sub.max_marks;
-        doc.fillColor('#a0aec0').text('-', x, curY + 4, { width: subColW, align: 'center' }).fillColor('#000');
+        const res = marksMap[`${s.id}_${sub.id}`];
+        const marks = res ? parseFloat(res.marks_obtained) : null;
+        if (marks !== null) {
+          totalObt += marks;
+          totalMax += sub.max_marks;
+          if ((marks / sub.max_marks) * 100 < 33) isPass = false;
+          doc.text(marks.toFixed(1), x, curY + 4, { width: subColW, align: 'center' });
+        } else {
+          totalMax += sub.max_marks;
+          doc.fillColor('#a0aec0').text('-', x, curY + 4, { width: subColW, align: 'center' }).fillColor('#000');
+        }
       }
       x += subColW;
     });

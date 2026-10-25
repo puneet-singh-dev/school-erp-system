@@ -3,6 +3,14 @@ const router = express.Router();
 const db = require('../config/db');
 const { isTeacher } = require('../middleware/auth');
 const moment = require('moment');
+const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
+const { isSubjectApplicableToStudent, generateMarksCSVTemplate, parseMarksCSV } = require('../utils/csvMarksHelper');
+
+const tempUploadDir = path.join(__dirname, '../public/uploads/temp');
+if (!fs.existsSync(tempUploadDir)) fs.mkdirSync(tempUploadDir, { recursive: true });
+const tempUpload = multer({ dest: tempUploadDir });
 
 router.use(isTeacher);
 
@@ -114,12 +122,85 @@ router.get('/results/enter/:examId', async (req, res) => {
   const [exams] = await db.query('SELECT e.*, c.name as class_name, c.id as class_id FROM exams e JOIN classes c ON e.class_id=c.id WHERE e.id=?', [req.params.examId]);
   if (!exams.length) { req.flash('error_msg', 'Exam not found'); return res.redirect('/teacher/results'); }
   const exam = exams[0];
-  const [students] = await db.query(`SELECT s.id, u.name, s.roll_number, s.admission_no FROM students s JOIN users u ON s.user_id=u.id WHERE s.class_id=? ORDER BY s.roll_number`, [exam.class_id]);
-  const [subjects] = await db.query('SELECT * FROM subjects WHERE class_id=? AND teacher_id=? ORDER BY name', [exam.class_id, req.session.user.id]);
+  const [students] = await db.query(`SELECT s.id, u.name, s.roll_number, s.admission_no, s.optional_subject 
+    FROM students s 
+    JOIN users u ON s.user_id=u.id 
+    WHERE s.class_id=? 
+    ORDER BY (s.roll_number IS NULL OR s.roll_number = 0), s.roll_number ASC, u.name ASC`, [exam.class_id]);
+  const [subjects] = await db.query(`SELECT * FROM subjects WHERE class_id=? AND (teacher_id=? OR teacher_id IS NULL OR class_id IN (SELECT id FROM classes WHERE teacher_id=?)) ORDER BY name`, [exam.class_id, req.session.user.id, req.session.user.id]);
   const [existingResults] = await db.query('SELECT * FROM results WHERE exam_id=?', [req.params.examId]);
   const resultsMap = {};
   existingResults.forEach(r => { resultsMap[`${r.student_id}_${r.subject_id}`] = r; });
   res.render('teacher/result-entry', { title: 'Enter Results', exam, students, subjects, resultsMap });
+});
+
+// CSV Template Download for Teacher
+router.get('/results/template/:examId', async (req, res) => {
+  try {
+    const [exams] = await db.query('SELECT e.*, c.name as class_name, c.id as class_id FROM exams e JOIN classes c ON e.class_id=c.id WHERE e.id=?', [req.params.examId]);
+    if (!exams.length) return res.status(404).send('Exam not found');
+    const exam = exams[0];
+    const [students] = await db.query(`SELECT s.id, u.name, s.roll_number, s.admission_no, s.optional_subject 
+      FROM students s 
+      JOIN users u ON s.user_id=u.id 
+      WHERE s.class_id=? 
+      ORDER BY (s.roll_number IS NULL OR s.roll_number = 0), s.roll_number ASC, u.name ASC`, [exam.class_id]);
+    const [subjects] = await db.query(`SELECT * FROM subjects WHERE class_id=? AND (teacher_id=? OR teacher_id IS NULL OR class_id IN (SELECT id FROM classes WHERE teacher_id=?)) ORDER BY name`, [exam.class_id, req.session.user.id, req.session.user.id]);
+    const [existingResults] = await db.query('SELECT * FROM results WHERE exam_id=?', [req.params.examId]);
+    const resultsMap = {};
+    existingResults.forEach(r => { resultsMap[`${r.student_id}_${r.subject_id}`] = r; });
+
+    const csvData = generateMarksCSVTemplate(exam, students, subjects, resultsMap);
+    const filename = `marks_template_${exam.class_name.replace(/\s+/g, '_')}_${exam.name.replace(/\s+/g, '_')}.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csvData);
+  } catch (err) {
+    console.error('Error generating teacher marks template:', err);
+    res.status(500).send('Error generating marks template: ' + err.message);
+  }
+});
+
+// CSV Marks Bulk Upload for Teacher
+router.post('/results/upload-csv/:examId', tempUpload.single('csv_file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      req.flash('error_msg', 'Please choose a CSV file to upload.');
+      return res.redirect(`/teacher/results/enter/${req.params.examId}`);
+    }
+
+    const [exams] = await db.query('SELECT e.*, c.name as class_name, c.id as class_id FROM exams e JOIN classes c ON e.class_id=c.id WHERE e.id=?', [req.params.examId]);
+    if (!exams.length) return res.status(404).send('Exam not found');
+    const exam = exams[0];
+
+    const [students] = await db.query(`SELECT s.id, u.name, s.roll_number, s.admission_no, s.optional_subject FROM students s JOIN users u ON s.user_id=u.id WHERE s.class_id=?`, [exam.class_id]);
+    const [subjects] = await db.query('SELECT * FROM subjects WHERE class_id=?', [exam.class_id]);
+
+    const fileContent = fs.readFileSync(req.file.path, 'utf8');
+    const parsedMarks = parseMarksCSV(fileContent, students, subjects);
+
+    let savedCount = 0;
+    for (const item of parsedMarks) {
+      const pct = (item.marks_obtained / item.max_marks) * 100;
+      const grade = pct >= 90 ? 'A+' : pct >= 80 ? 'A' : pct >= 70 ? 'B' : pct >= 60 ? 'C' : pct >= 50 ? 'D' : (pct >= 33 ? 'E' : 'F');
+      await db.query(
+        `INSERT INTO results (student_id, exam_id, subject_id, marks_obtained, max_marks, grade, entered_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE marks_obtained=?, grade=?, entered_by=?`,
+        [item.student_id, exam.id, item.subject_id, item.marks_obtained, item.max_marks, grade, req.session.user.id, item.marks_obtained, grade, req.session.user.id]
+      );
+      savedCount++;
+    }
+
+    try { fs.unlinkSync(req.file.path); } catch (uErr) {}
+
+    req.flash('success_msg', `CSV Upload Successful! Imported ${savedCount} student marks.`);
+    res.redirect(`/teacher/results/enter/${req.params.examId}`);
+  } catch (err) {
+    console.error('Error uploading CSV marks:', err);
+    req.flash('error_msg', 'Error uploading CSV: ' + err.message);
+    res.redirect(`/teacher/results/enter/${req.params.examId}`);
+  }
 });
 
 router.post('/results/save/:examId', async (req, res) => {

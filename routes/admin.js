@@ -19,6 +19,7 @@ const { calculateClassRanks } = require('../utils/examRankHelper');
 const { getPendingFeeReport } = require('../utils/feeReport');
 const { generateSqlBackup } = require('../utils/dbBackup');
 const { getSettings, updateSettings } = require('../utils/settingsHelper');
+const { isSubjectApplicableToStudent, generateMarksCSVTemplate, parseMarksCSV } = require('../utils/csvMarksHelper');
 
 // Configure Multer for student profile photo uploads
 const uploadDir = path.join(__dirname, '../public/uploads/students');
@@ -383,14 +384,15 @@ router.post('/students/add', upload.single('profile_photo'), async (req, res) =>
     const cleanUsesTransport = (uses_transport === '1' || uses_transport === 1 || uses_transport === true) ? 1 : 0;
     const cleanTransportRoute = cleanUsesTransport ? ((transport_route && transport_route.trim()) || null) : null;
     const cleanTransportFee = cleanUsesTransport ? (Math.max(0, parseFloat(transport_fee) || 0)) : 0.00;
+    const cleanOptionalSubject = (req.body.optional_subject && req.body.optional_subject.trim()) || null;
 
     await db.query(
       `INSERT INTO students 
        (user_id, admission_no, class_id, roll_number, date_of_birth, gender, 
         father_name, mother_name, guardian_name, guardian_phone, emergency_contact, 
         blood_group, category, aadhaar_no, admission_date, previous_balance, previous_balance_remarks,
-        uses_transport, transport_route, transport_fee) 
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        uses_transport, transport_route, transport_fee, optional_subject) 
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         userResult.insertId, admission_no, class_id || null, roll_number || null,
         date_of_birth || null, gender || null,
@@ -400,7 +402,8 @@ router.post('/students/add', upload.single('profile_photo'), async (req, res) =>
         admission_date || new Date().toISOString().split('T')[0],
         Math.max(0, parseFloat(previous_balance) || 0),
         (previous_balance_remarks && previous_balance_remarks.trim()) || null,
-        cleanUsesTransport, cleanTransportRoute, cleanTransportFee
+        cleanUsesTransport, cleanTransportRoute, cleanTransportFee,
+        cleanOptionalSubject
       ]
     );
 
@@ -454,6 +457,7 @@ router.post('/students/edit/:id', upload.single('profile_photo'), async (req, re
     const cleanUsesTransport = (uses_transport === '1' || uses_transport === 1 || uses_transport === true) ? 1 : 0;
     const cleanTransportRoute = cleanUsesTransport ? ((transport_route && transport_route.trim()) || null) : null;
     const cleanTransportFee = cleanUsesTransport ? (Math.max(0, parseFloat(transport_fee) || 0)) : 0.00;
+    const cleanOptionalSubject = (req.body.optional_subject && req.body.optional_subject.trim()) || null;
 
     await db.query(
       `UPDATE students SET 
@@ -461,7 +465,8 @@ router.post('/students/edit/:id', upload.single('profile_photo'), async (req, re
         father_name=?, mother_name=?, guardian_name=?, guardian_phone=?, 
         emergency_contact=?, blood_group=?, category=?, aadhaar_no=?,
         previous_balance=?, previous_balance_remarks=?,
-        uses_transport=?, transport_route=?, transport_fee=?
+        uses_transport=?, transport_route=?, transport_fee=?,
+        optional_subject=?
        WHERE id=?`,
       [
         class_id || null, roll_number || null, date_of_birth || null, gender || null,
@@ -471,6 +476,7 @@ router.post('/students/edit/:id', upload.single('profile_photo'), async (req, re
         Math.max(0, parseFloat(previous_balance) || 0),
         (previous_balance_remarks && previous_balance_remarks.trim()) || null,
         cleanUsesTransport, cleanTransportRoute, cleanTransportFee,
+        cleanOptionalSubject,
         req.params.id
       ]
     );
@@ -1516,12 +1522,87 @@ router.get('/results/enter/:examId', async (req, res) => {
   const [exams] = await db.query('SELECT e.*, c.name as class_name, c.id as class_id FROM exams e JOIN classes c ON e.class_id=c.id WHERE e.id=?', [req.params.examId]);
   if (!exams.length) { req.flash('error_msg', 'Exam not found'); return res.redirect('/admin/results'); }
   const exam = exams[0];
-  const [students] = await db.query(`SELECT s.id, u.name, s.roll_number, s.admission_no FROM students s JOIN users u ON s.user_id=u.id WHERE s.class_id=? ORDER BY (s.roll_number IS NULL OR s.roll_number = 0), s.roll_number ASC, u.name ASC`, [exam.class_id]);
+  const [students] = await db.query(`SELECT s.id, u.name, s.roll_number, s.admission_no, s.optional_subject 
+    FROM students s 
+    JOIN users u ON s.user_id=u.id 
+    WHERE s.class_id=? 
+    ORDER BY (s.roll_number IS NULL OR s.roll_number = 0), s.roll_number ASC, u.name ASC`, [exam.class_id]);
   const [subjects] = await db.query('SELECT * FROM subjects WHERE class_id=? ORDER BY name', [exam.class_id]);
   const [existingResults] = await db.query('SELECT * FROM results WHERE exam_id=?', [req.params.examId]);
   const resultsMap = {};
   existingResults.forEach(r => { resultsMap[`${r.student_id}_${r.subject_id}`] = r; });
-  res.render('admin/result-entry', { title: 'Enter Results', exam, students, subjects, resultsMap });
+  const selectedSubjectId = req.query.subject_id || 'all';
+  res.render('admin/result-entry', { title: 'Enter Results', exam, students, subjects, resultsMap, selectedSubjectId });
+});
+
+// CSV Template Download
+router.get('/results/template/:examId', async (req, res) => {
+  try {
+    const [exams] = await db.query('SELECT e.*, c.name as class_name, c.id as class_id FROM exams e JOIN classes c ON e.class_id=c.id WHERE e.id=?', [req.params.examId]);
+    if (!exams.length) return res.status(404).send('Exam not found');
+    const exam = exams[0];
+    const [students] = await db.query(`SELECT s.id, u.name, s.roll_number, s.admission_no, s.optional_subject 
+      FROM students s 
+      JOIN users u ON s.user_id=u.id 
+      WHERE s.class_id=? 
+      ORDER BY (s.roll_number IS NULL OR s.roll_number = 0), s.roll_number ASC, u.name ASC`, [exam.class_id]);
+    const [subjects] = await db.query('SELECT * FROM subjects WHERE class_id=? ORDER BY name', [exam.class_id]);
+    const [existingResults] = await db.query('SELECT * FROM results WHERE exam_id=?', [req.params.examId]);
+    const resultsMap = {};
+    existingResults.forEach(r => { resultsMap[`${r.student_id}_${r.subject_id}`] = r; });
+
+    const csvData = generateMarksCSVTemplate(exam, students, subjects, resultsMap);
+    const filename = `marks_template_${exam.class_name.replace(/\s+/g, '_')}_${exam.name.replace(/\s+/g, '_')}.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csvData);
+  } catch (err) {
+    console.error('Error generating marks template:', err);
+    res.status(500).send('Error generating marks template: ' + err.message);
+  }
+});
+
+// CSV Marks Bulk Upload
+router.post('/results/upload-csv/:examId', upload.single('csv_file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      req.flash('error_msg', 'Please choose a CSV file to upload.');
+      return res.redirect(`/admin/results/enter/${req.params.examId}`);
+    }
+
+    const [exams] = await db.query('SELECT e.*, c.name as class_name, c.id as class_id FROM exams e JOIN classes c ON e.class_id=c.id WHERE e.id=?', [req.params.examId]);
+    if (!exams.length) return res.status(404).send('Exam not found');
+    const exam = exams[0];
+
+    const [students] = await db.query(`SELECT s.id, u.name, s.roll_number, s.admission_no, s.optional_subject FROM students s JOIN users u ON s.user_id=u.id WHERE s.class_id=?`, [exam.class_id]);
+    const [subjects] = await db.query('SELECT * FROM subjects WHERE class_id=?', [exam.class_id]);
+
+    const fileContent = fs.readFileSync(req.file.path, 'utf8');
+    const parsedMarks = parseMarksCSV(fileContent, students, subjects);
+
+    let savedCount = 0;
+    for (const item of parsedMarks) {
+      const pct = (item.marks_obtained / item.max_marks) * 100;
+      const grade = pct >= 90 ? 'A+' : pct >= 80 ? 'A' : pct >= 70 ? 'B' : pct >= 60 ? 'C' : pct >= 50 ? 'D' : (pct >= 33 ? 'E' : 'F');
+      await db.query(
+        `INSERT INTO results (student_id, exam_id, subject_id, marks_obtained, max_marks, grade, entered_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE marks_obtained=?, grade=?, entered_by=?`,
+        [item.student_id, exam.id, item.subject_id, item.marks_obtained, item.max_marks, grade, req.session.user.id, item.marks_obtained, grade, req.session.user.id]
+      );
+      savedCount++;
+    }
+
+    // Clean up temporary uploaded file
+    try { fs.unlinkSync(req.file.path); } catch (uErr) {}
+
+    req.flash('success_msg', `CSV Upload Successful! Imported ${savedCount} student marks.`);
+    res.redirect(`/admin/results/enter/${req.params.examId}`);
+  } catch (err) {
+    console.error('Error uploading CSV marks:', err);
+    req.flash('error_msg', 'Error uploading CSV: ' + err.message);
+    res.redirect(`/admin/results/enter/${req.params.examId}`);
+  }
 });
 
 router.post('/results/save/:examId', async (req, res) => {
@@ -1608,7 +1689,7 @@ router.get('/results/class-marks', async (req, res) => {
       if (examId) {
         [[selectedExam]] = await db.query('SELECT * FROM exams WHERE id=?', [examId]);
         [students] = await db.query(`
-          SELECT s.id, u.name, s.roll_number, s.admission_no 
+          SELECT s.id, u.name, s.roll_number, s.admission_no, s.optional_subject 
           FROM students s 
           JOIN users u ON s.user_id=u.id 
           WHERE s.class_id=? 
@@ -1662,7 +1743,7 @@ router.get('/results/class-marks/pdf', async (req, res) => {
     if (!selectedClass || !selectedExam) return res.status(404).send('Class or Exam not found');
 
     const [students] = await db.query(`
-      SELECT s.id, u.name, s.roll_number, s.admission_no 
+      SELECT s.id, u.name, s.roll_number, s.admission_no, s.optional_subject 
       FROM students s 
       JOIN users u ON s.user_id=u.id 
       WHERE s.class_id=? 
