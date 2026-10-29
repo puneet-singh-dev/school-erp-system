@@ -7,6 +7,7 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const { isSubjectApplicableToStudent, generateMarksCSVTemplate, parseMarksCSV } = require('../utils/csvMarksHelper');
+const { getStudentFullAcademicHistory } = require('../utils/promotionHelper');
 
 const tempUploadDir = path.join(__dirname, '../public/uploads/temp');
 if (!fs.existsSync(tempUploadDir)) fs.mkdirSync(tempUploadDir, { recursive: true });
@@ -240,12 +241,21 @@ router.get('/results/report-card/:studentId/:examId', async (req, res) => {
     if (!exams.length) return res.status(404).send('Exam not found');
     const currentExam = exams[0];
 
-    const [subjects] = await db.query('SELECT * FROM subjects WHERE class_id=? ORDER BY name', [student.class_id]);
+    const examClassId = currentExam.class_id;
+    // Preserve historical class details for this specific exam (supports promoted students)
+    const [examClassRows] = await db.query('SELECT name, section, academic_year FROM classes WHERE id=?', [examClassId]);
+    if (examClassRows.length) {
+      student.class_name = examClassRows[0].name;
+      student.section = examClassRows[0].section;
+      student.academic_year = examClassRows[0].academic_year;
+    }
+
+    const [subjects] = await db.query('SELECT * FROM subjects WHERE class_id=? ORDER BY name', [examClassId]);
     const [currentResults] = await db.query('SELECT * FROM results WHERE student_id=? AND exam_id=?', [student.id, currentExam.id]);
 
     const isAnnual = /annual|3rd|third|final/i.test(currentExam.name) || req.query.consolidated === '1';
 
-    const [allExams] = await db.query('SELECT * FROM exams WHERE class_id=? ORDER BY id ASC', [student.class_id]);
+    const [allExams] = await db.query('SELECT * FROM exams WHERE class_id=? ORDER BY id ASC', [examClassId]);
     let allResults = [];
     if (allExams.length > 0) {
       const examIds = allExams.map(e => e.id);
@@ -253,7 +263,7 @@ router.get('/results/report-card/:studentId/:examId', async (req, res) => {
       allResults = resRows;
     }
 
-    const { ranksMap } = await calculateClassRanks(student.class_id, currentExam.id, isAnnual);
+    const { ranksMap } = await calculateClassRanks(examClassId, currentExam.id, isAnnual);
 
     generateReportCardPDF(res, student, currentExam, subjects, currentResults, ranksMap, allExams, allResults);
   } catch (err) {
@@ -267,6 +277,27 @@ router.get('/students', async (req, res) => {
   const userId = req.session.user.id;
   const [students] = await db.query(`SELECT s.*, u.name, u.email, u.phone, c.name as class_name, c.section FROM students s JOIN users u ON s.user_id=u.id JOIN classes c ON s.class_id=c.id WHERE c.teacher_id=? ORDER BY u.name`, [userId]);
   res.render('teacher/students', { title: 'My Students', students });
+});
+
+// View student academic & fee history
+router.get('/students/history/:id', async (req, res) => {
+  try {
+    const studentId = parseInt(req.params.id, 10);
+    const historyData = await getStudentFullAcademicHistory(studentId);
+    if (!historyData) {
+      req.flash('error_msg', 'Student not found');
+      return res.redirect('/teacher/students');
+    }
+
+    res.render('admin/student-history', {
+      title: `${historyData.student.student_name} - Academic & Fee History`,
+      ...historyData
+    });
+  } catch (err) {
+    console.error('Teacher student history error:', err);
+    req.flash('error_msg', 'Error retrieving academic history: ' + err.message);
+    res.redirect('/teacher/students');
+  }
 });
 
 // Attendance report

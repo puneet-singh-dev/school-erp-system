@@ -2,7 +2,7 @@
 <div class="card shadow-sm">
   <div class="card-body p-0">
     <table class="table table-hover align-middle mb-0">
-      <thead class="table-dark"><tr><th>#</th><th>Name</th><th>Adm. No</th><th>Class</th><th>Phone</th></tr></thead>
+      <thead class="table-dark"><tr><th>#</th><th>Name</th><th>Adm. No</th><th>Class</th><th>Phone</th><th class="text-end pe-3">Actions</th></tr></thead>
       <tbody>
         <% students.forEach((s,i) => { %>
         <tr>
@@ -11,9 +11,14 @@
           <td><%- s.admission_no %></td>
           <td><%- s.class_name %> - <%- s.section %></td>
           <td><%- s.phone||'-' %></td>
+          <td class="text-end pe-3">
+            <a href="/teacher/students/history/<%- s.id %>" class="btn btn-sm btn-outline-info" title="Academic & Fee History">
+              <i class="fa-solid fa-clock-rotate-left me-1"></i>History
+            </a>
+          </td>
         </tr>
         <% }) %>
-        <% if(!students.length) { %><tr><td colspan="5" class="text-center py-4 text-muted">No students in your classes</td></tr><% } %>
+        <% if(!students.length) { %><tr><td colspan="6" class="text-center py-4 text-muted">No students in your classes</td></tr><% } %>
       </tbody>
     </table>
   </div>

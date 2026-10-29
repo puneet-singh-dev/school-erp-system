@@ -1,0 +1,583 @@
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+  <div>
+    <h5 class="fw-bold mb-1">
+      <i class="fa-solid fa-graduation-cap text-primary me-2"></i>Student Promotion &amp; Session Migration
+    </h5>
+    <small class="text-muted">Promote students to next class in bulk, assign UP Board optional subjects, carry forward fee dues, and archive past records.</small>
+  </div>
+  <div class="d-flex gap-2">
+    <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#quickAddClassModal">
+      <i class="fa-solid fa-plus me-1"></i>Create Target Class
+    </button>
+    <a href="/admin/students" class="btn btn-outline-secondary">
+      <i class="fa-solid fa-arrow-left me-1"></i>Back to Students
+    </a>
+  </div>
+</div>
+
+<!-- ==================== PROMOTION SETUP CARD ==================== -->
+<div class="card shadow-sm border-0 mb-4">
+  <div class="card-header bg-white py-3 border-bottom">
+    <h6 class="fw-bold mb-0 text-dark">
+      <i class="fa-solid fa-sliders text-primary me-2"></i>Step 1: Promotion Configuration
+    </h6>
+  </div>
+  <div class="card-body">
+    <form method="GET" action="/admin/students/promote" id="setupForm" class="row g-3">
+      <!-- Source Class -->
+      <div class="col-md-5">
+        <label class="form-label fw-bold">
+          Source Class (Current Class to Promote From) <span class="text-danger">*</span>
+        </label>
+        <select name="source_class_id" id="sourceClassSelect" class="form-select form-select-lg" onchange="this.form.submit()">
+          <option value="">-- Choose Source Class --</option>
+          <% classes.forEach(c => { %>
+            <option value="<%- c.id %>" <%- sourceClassId == c.id ? 'selected' : '' %>>
+              <%- c.name %> - Section <%- c.section %> (<%- c.academic_year || '2026-27' %>)
+            </option>
+          <% }) %>
+        </select>
+        <small class="text-muted">Select the class containing students who have completed the session.</small>
+      </div>
+
+      <!-- Target Class -->
+      <div class="col-md-5">
+        <label class="form-label fw-bold">
+          Target Class (Promote Into) <span class="text-danger">*</span>
+        </label>
+        <select name="target_class_id" id="targetClassSelect" class="form-select form-select-lg" onchange="this.form.submit()">
+          <option value="">-- Choose Target Class --</option>
+          <% classes.forEach(c => { %>
+            <% if(c.id != sourceClassId) { %>
+              <option value="<%- c.id %>" <%- targetClassId == c.id ? 'selected' : '' %>>
+                <%- c.name %> - Section <%- c.section %> (<%- c.academic_year || '2027-28' %>)
+              </option>
+            <% } %>
+          <% }) %>
+        </select>
+        <small class="text-muted">Need a new class? Click "Create Target Class" above.</small>
+      </div>
+
+      <div class="col-md-2 d-flex align-items-end">
+        <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold">
+          <i class="fa-solid fa-arrows-rotate me-1"></i>Refresh
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<% if(sourceClass) { %>
+  <!-- ==================== PROMOTION WORKBENCH ==================== -->
+  <form action="/admin/students/promote" method="POST" id="promoteForm">
+    <input type="hidden" name="source_class_id" value="<%- sourceClass.id %>">
+    <input type="hidden" name="target_class_id" value="<%- targetClass ? targetClass.id : '' %>" id="formTargetClassId">
+
+    <!-- KPI / Overview Bar -->
+    <div class="row g-3 mb-4">
+      <div class="col-md-3">
+        <div class="card border-0 shadow-sm bg-primary text-white p-3">
+          <small class="opacity-75 text-uppercase fw-semibold" style="font-size:0.75rem;">Source Class</small>
+          <h5 class="fw-bold mb-0 mt-1"><%- sourceClass.name %> - <%- sourceClass.section %></h5>
+          <small class="opacity-75">Session: <%- sourceClass.academic_year || '2026-27' %></small>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card border-0 shadow-sm bg-light border p-3">
+          <small class="text-muted text-uppercase fw-semibold" style="font-size:0.75rem;">Total Enrolled</small>
+          <h4 class="fw-bold text-dark mb-0 mt-1"><%- students.length %> <span class="fs-6 fw-normal text-muted">Students</span></h4>
+          <small class="text-muted"><%- students.filter(s => s.isPass).length %> Passed / Eligible</small>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card border-0 shadow-sm bg-light border p-3">
+          <small class="text-muted text-uppercase fw-semibold" style="font-size:0.75rem;">Exam Performance</small>
+          <div class="mt-1 d-flex align-items-center gap-2">
+            <span class="badge bg-success"><%- students.filter(s => s.isPass).length %> Eligible</span>
+            <span class="badge bg-danger"><%- students.filter(s => !s.isPass && s.hasExams).length %> Failed</span>
+            <span class="badge bg-secondary"><%- students.filter(s => !s.hasExams).length %> No Exam</span>
+          </div>
+          <small class="text-muted mt-1 d-block">Min. passing mark: 33%</small>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card border-0 shadow-sm bg-light border p-3">
+          <small class="text-muted text-uppercase fw-semibold" style="font-size:0.75rem;">Pending Fee Dues</small>
+          <% const totalPending = students.reduce((acc, s) => acc + (s.pendingFee || 0), 0); %>
+          <h4 class="fw-bold <%- totalPending > 0 ? 'text-danger' : 'text-success' %> mb-0 mt-1">
+            ₹<%- totalPending.toLocaleString('en-IN') %>
+          </h4>
+          <small class="text-muted"><%- students.filter(s => s.pendingFee > 0).length %> students with dues</small>
+        </div>
+      </div>
+    </div>
+
+    <!-- Options and Bulk Tools Toolbar -->
+    <div class="card shadow-sm border-0 mb-4">
+      <div class="card-body">
+        <div class="row g-3 align-items-center">
+          <div class="col-lg-6">
+            <div class="d-flex flex-wrap gap-3">
+              <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" id="carryForwardFeesCheck" name="carry_forward_fees" value="1" checked>
+                <label class="form-check-label fw-bold text-dark" for="carryForwardFeesCheck">
+                  Carry forward pending fees as Previous Balance
+                </label>
+                <div class="text-muted small">Automatically transfers unpaid source dues to target session.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-lg-3">
+            <label class="form-label small fw-bold mb-1">Target Academic Session</label>
+            <input type="text" name="target_academic_year" class="form-control form-control-sm" 
+                   value="<%- targetClass ? (targetClass.academic_year || '2027-28') : '2027-28' %>" 
+                   placeholder="e.g. 2027-28">
+          </div>
+
+          <div class="col-lg-3">
+            <label class="form-label small fw-bold mb-1">Promotion Remarks (Optional)</label>
+            <input type="text" name="promotion_remarks" class="form-control form-control-sm" 
+                   placeholder="e.g. Annual Promotion 2026-27">
+          </div>
+        </div>
+
+        <hr class="my-3">
+
+        <!-- Selection Controls & UP Board Bulk Buttons -->
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+          <div class="d-flex flex-wrap gap-2 align-items-center">
+            <span class="fw-bold small text-muted text-uppercase me-1">Selection:</span>
+            <button type="button" class="btn btn-sm btn-outline-success" onclick="selectPassedOnly()">
+              <i class="fa-solid fa-check-double me-1"></i>Select Passed Only (<%- students.filter(s => s.isPass).length %>)
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-primary" onclick="selectAll(true)">
+              <i class="fa-solid fa-check me-1"></i>Select All (<%- students.length %>)
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectAll(false)">
+              <i class="fa-solid fa-xmark me-1"></i>Deselect All
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-dark ms-2" onclick="resequenceRollNumbers()">
+              <i class="fa-solid fa-arrow-down-1-9 me-1"></i>Auto-Sequence Roll Nos (1, 2, 3...)
+            </button>
+          </div>
+
+          <% 
+            const isTargetSenior = targetClass && (
+              targetClass.name.toLowerCase().includes('11') || 
+              targetClass.name.toLowerCase().includes('12') ||
+              targetClass.name.toLowerCase().includes('xi') || 
+              targetClass.name.toLowerCase().includes('xii')
+            );
+            const isTargetHigh = targetClass && (
+              targetClass.name.toLowerCase().includes('9') || 
+              targetClass.name.toLowerCase().includes('10') ||
+              targetClass.name.toLowerCase().includes('ix') || 
+              targetClass.name.toLowerCase().includes('x')
+            );
+          %>
+
+          <% if(isTargetHigh) { %>
+            <div class="d-flex gap-2 align-items-center bg-light p-2 rounded border">
+              <span class="badge bg-primary">UP Board Class 9-10</span>
+              <span class="small fw-bold">Set All Optional:</span>
+              <button type="button" class="btn btn-sm btn-outline-primary py-0" onclick="setBulkOptional('Drawing')">
+                चित्रकला (Drawing)
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-primary py-0" onclick="setBulkOptional('Sanskrit')">
+                संस्कृत (Sanskrit)
+              </button>
+            </div>
+          <% } else if(isTargetSenior) { %>
+            <div class="d-flex gap-2 align-items-center bg-light p-2 rounded border">
+              <span class="badge bg-success">UP Board Class 11-12</span>
+              <span class="small fw-bold">Set All Optional:</span>
+              <button type="button" class="btn btn-sm btn-outline-success py-0" onclick="setBulkOptional('Mathematics')">
+                गणित (Mathematics)
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-success py-0" onclick="setBulkOptional('Biology')">
+                जीव विज्ञान (Biology)
+              </button>
+            </div>
+          <% } %>
+        </div>
+      </div>
+    </div>
+
+    <!-- Student Promotion Table -->
+    <div class="card shadow-sm border-0 mb-4">
+      <div class="card-header bg-dark text-white py-3 d-flex justify-content-between align-items-center">
+        <h6 class="mb-0 fw-bold">
+          <i class="fa-solid fa-users me-2"></i>Students Eligible for Promotion (<%- students.length %> Enrolled)
+        </h6>
+        <span class="badge bg-warning text-dark fw-bold">
+          <span id="selectedCountDisplay"><%- students.filter(s => s.isPass).length %></span> Selected
+        </span>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0" id="promotionTable">
+            <thead class="table-light">
+              <tr>
+                <th class="text-center" style="width: 50px;">
+                  <input class="form-check-input" type="checkbox" id="masterCheckbox" onclick="toggleMaster(this)">
+                </th>
+                <th class="text-center" style="width: 140px;">Roll No (Old &rarr; New)</th>
+                <th>Student Details</th>
+                <th>Father's Name</th>
+                <th>Exam Performance</th>
+                <th>Fee Balance</th>
+                <% if(isTargetHigh || isTargetSenior) { %>
+                  <th style="min-width: 190px;">UP Board Optional Subject</th>
+                <% } %>
+                <th class="text-center" style="width: 70px;">Past Record</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if(students.length > 0) { %>
+                <% students.forEach((s, idx) => { %>
+                  <tr class="student-row <%- s.isPass ? 'table-row-passed' : 'table-row-failed bg-danger-subtle' %>" id="row_<%- s.id %>">
+                    <!-- Checkbox -->
+                    <td class="text-center">
+                      <input class="form-check-input student-checkbox" type="checkbox" 
+                             name="selected_students" value="<%- s.id %>" 
+                             data-pass="<%- s.isPass ? '1' : '0' %>"
+                             data-fee="<%- s.pendingFee || 0 %>"
+                             <%- s.isPass ? 'checked' : '' %>
+                             onchange="updateSelectionSummary()">
+                    </td>
+
+                    <!-- Roll No Old -> New -->
+                    <td class="text-center">
+                      <div class="d-flex align-items-center justify-content-center gap-1">
+                        <span class="badge bg-secondary" title="Source Roll No"><%- s.roll_number || '-' %></span>
+                        <i class="fa-solid fa-arrow-right text-muted small"></i>
+                        <input type="number" name="new_roll_numbers[<%- s.id %>]" 
+                               class="form-control form-control-sm text-center fw-bold new-roll-input" 
+                               value="<%- s.roll_number || (idx + 1) %>" 
+                               style="width: 65px;" min="1" max="999">
+                      </div>
+                    </td>
+
+                    <!-- Student Name & Adm No -->
+                    <td>
+                      <div class="d-flex align-items-center gap-2">
+                        <% if(s.profile_photo && s.profile_photo !== 'default.png') { %>
+                          <img src="/uploads/students/<%- s.profile_photo %>" alt="<%- s.name %>" class="rounded-circle border shadow-sm" style="width: 34px; height: 34px; object-fit: cover;">
+                        <% } else { %>
+                          <div class="avatar-circle" style="width: 34px; height: 34px; font-size: 0.85rem;"><%- s.name.charAt(0) %></div>
+                        <% } %>
+                        <div>
+                          <span class="fw-bold text-dark d-block"><%- s.name %></span>
+                          <small class="text-muted">Adm: <%- s.admission_no %></small>
+                        </div>
+                      </div>
+                    </td>
+
+                    <!-- Father Name -->
+                    <td>
+                      <span class="text-secondary fw-semibold small"><%- s.father_name || s.guardian_name || '-' %></span>
+                    </td>
+
+                    <!-- Academic Performance Status -->
+                    <td>
+                      <% if(s.hasExams) { %>
+                        <% if(s.isPass) { %>
+                          <span class="badge bg-success-subtle text-success border border-success px-2 py-1">
+                            <i class="fa-solid fa-circle-check me-1"></i>Passed (<%- s.percentage %>%)
+                          </span>
+                        <% } else { %>
+                          <span class="badge bg-danger text-white px-2 py-1" title="Failed to achieve minimum 33%">
+                            <i class="fa-solid fa-triangle-exclamation me-1"></i>Failed (<%- s.percentage %>%)
+                          </span>
+                        <% } %>
+                        <div class="small text-muted" style="font-size: 0.72rem;">
+                          Marks: <%- s.totalObtained %> / <%- s.totalMax %>
+                        </div>
+                      <% } else { %>
+                        <span class="badge bg-secondary-subtle text-secondary border px-2 py-1">
+                          <i class="fa-solid fa-info-circle me-1"></i>No Exams Recorded
+                        </span>
+                        <div class="small text-muted" style="font-size: 0.72rem;">Eligible for promotion</div>
+                      <% } %>
+                    </td>
+
+                    <!-- Fee Dues Status -->
+                    <td>
+                      <% if(s.isFeeCleared || s.pendingFee <= 0) { %>
+                        <span class="badge bg-success-subtle text-success border border-success">
+                          <i class="fa-solid fa-check me-1"></i>₹0 Cleared
+                        </span>
+                      <% } else { %>
+                        <span class="badge bg-danger-subtle text-danger border border-danger fw-bold">
+                          <i class="fa-solid fa-clock-rotate-left me-1"></i>₹<%- s.pendingFee.toLocaleString('en-IN') %> Due
+                        </span>
+                        <div class="small text-muted" style="font-size: 0.70rem;">Will carry forward</div>
+                      <% } %>
+                    </td>
+
+                    <!-- UP Board Optional Subject -->
+                    <% if(isTargetHigh || isTargetSenior) { %>
+                      <td>
+                        <% if(isTargetHigh) { %>
+                          <!-- Class 9 & 10: Drawing vs Sanskrit -->
+                          <select name="optional_subjects[<%- s.id %>]" class="form-select form-select-sm optional-subject-select">
+                            <option value="Drawing" <%- (s.optional_subject === 'Drawing' || !s.optional_subject) ? 'selected' : '' %>>चित्रकला (Drawing)</option>
+                            <option value="Sanskrit" <%- s.optional_subject === 'Sanskrit' ? 'selected' : '' %>>संस्कृत (Sanskrit)</option>
+                          </select>
+                        <% } else if(isTargetSenior) { %>
+                          <!-- Class 11 & 12: Math vs Biology -->
+                          <select name="optional_subjects[<%- s.id %>]" class="form-select form-select-sm optional-subject-select">
+                            <option value="Mathematics" <%- (s.optional_subject === 'Mathematics' || !s.optional_subject) ? 'selected' : '' %>>गणित (Mathematics)</option>
+                            <option value="Biology" <%- s.optional_subject === 'Biology' ? 'selected' : '' %>>जीव विज्ञान (Biology)</option>
+                          </select>
+                        <% } %>
+                      </td>
+                    <% } %>
+
+                    <!-- Past Record Link -->
+                    <td class="text-center">
+                      <a href="/admin/students/history/<%- s.id %>" target="_blank" class="btn btn-sm btn-outline-info" title="View Full Academic & Fee History">
+                        <i class="fa-solid fa-clock-rotate-left"></i>
+                      </a>
+                    </td>
+                  </tr>
+                <% }) %>
+              <% } else { %>
+                <tr>
+                  <td colspan="8" class="text-center py-5 text-muted">
+                    <i class="fa-solid fa-users-slash fa-2x mb-2 d-block opacity-50"></i>
+                    No students currently enrolled in this source class.
+                  </td>
+                </tr>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card-footer bg-white p-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div>
+          <span class="text-muted small">
+            Promoting from: <strong><%- sourceClass.name %> - <%- sourceClass.section %></strong> &rarr; 
+            Target: <strong><%- targetClass ? targetClass.name + ' - ' + targetClass.section : 'None selected' %></strong>
+          </span>
+        </div>
+
+        <div>
+          <% if(targetClass && students.length > 0) { %>
+            <button type="button" class="btn btn-success btn-lg fw-bold px-4 shadow" onclick="promptPromotionConfirmation()">
+              <i class="fa-solid fa-graduation-cap me-2"></i>Promote <span id="btnSelectedCount"><%- students.filter(s => s.isPass).length %></span> Students Now
+            </button>
+          <% } else if(!targetClass) { %>
+            <div class="alert alert-warning py-1 px-3 mb-0 small">
+              <i class="fa-solid fa-triangle-exclamation me-1"></i>Please select a <strong>Target Class</strong> above to proceed with promotion.
+            </div>
+          <% } %>
+        </div>
+      </div>
+    </div>
+  </form>
+<% } else { %>
+  <!-- Empty State when no source class selected -->
+  <div class="card shadow-sm border-0 py-5 text-center">
+    <div class="card-body">
+      <i class="fa-solid fa-graduation-cap fa-4x text-primary opacity-25 mb-3"></i>
+      <h5 class="fw-bold text-dark">Select a Source Class to Begin Promotion</h5>
+      <p class="text-muted small mx-auto" style="max-width: 500px;">
+        Choose the class whose academic session has ended. The system will load all student results, UP Board optional subjects, and fee balances for your review before promoting them.
+      </p>
+    </div>
+  </div>
+<% } %>
+
+<!-- ==================== MODAL: CONFIRM PROMOTION ==================== -->
+<div class="modal fade" id="confirmPromotionModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header bg-success text-white py-3">
+        <h6 class="modal-title fw-bold">
+          <i class="fa-solid fa-circle-check me-2"></i>Confirm Student Promotion
+        </h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-4">
+        <div class="text-center mb-3">
+          <i class="fa-solid fa-graduation-cap fa-3x text-success mb-2"></i>
+          <h5 class="fw-bold mb-1">Execute Batch Promotion</h5>
+          <p class="text-muted small">You are about to promote selected students to the new class session.</p>
+        </div>
+
+        <div class="list-group list-group-flush border rounded mb-3 small">
+          <div class="list-group-item d-flex justify-content-between">
+            <span class="text-muted">Source Class:</span>
+            <strong><%- sourceClass ? sourceClass.name + ' - ' + sourceClass.section + ' (' + (sourceClass.academic_year || '2026-27') + ')' : '-' %></strong>
+          </div>
+          <div class="list-group-item d-flex justify-content-between">
+            <span class="text-muted">Target Class:</span>
+            <strong class="text-success"><%- targetClass ? targetClass.name + ' - ' + targetClass.section : '-' %></strong>
+          </div>
+          <div class="list-group-item d-flex justify-content-between">
+            <span class="text-muted">Students Selected:</span>
+            <strong id="modalStudentCount" class="badge bg-primary fs-6">0</strong>
+          </div>
+          <div class="list-group-item d-flex justify-content-between">
+            <span class="text-muted">Carry Forward Fee Dues:</span>
+            <strong id="modalFeeStatus" class="text-dark">Yes</strong>
+          </div>
+          <div class="list-group-item d-flex justify-content-between bg-light">
+            <span class="text-muted">Historical Archive:</span>
+            <span class="text-success fw-semibold"><i class="fa-solid fa-shield-check me-1"></i>Previous records permanently preserved</span>
+          </div>
+        </div>
+
+        <div class="alert alert-info py-2 small mb-0">
+          <i class="fa-solid fa-circle-info me-1"></i>
+          Past marks, exams, and fee receipts will remain readily accessible under each student's <strong>Academic History</strong> record.
+        </div>
+      </div>
+      <div class="modal-footer bg-light py-2">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-success fw-bold px-4" onclick="document.getElementById('promoteForm').submit()">
+          <i class="fa-solid fa-check me-1"></i>Confirm &amp; Promote
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== MODAL: QUICK ADD TARGET CLASS ==================== -->
+<div class="modal fade" id="quickAddClassModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <form action="/admin/classes/add" method="POST">
+        <input type="hidden" name="return_to" value="/admin/students/promote?source_class_id=<%- sourceClassId || '' %>">
+        <div class="modal-header bg-primary text-white py-3">
+          <h6 class="modal-title fw-bold">
+            <i class="fa-solid fa-plus me-2"></i>Quick Create Target Class
+          </h6>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body p-4">
+          <div class="mb-3">
+            <label class="form-label fw-bold small">Class Name *</label>
+            <input type="text" name="name" class="form-control" placeholder="e.g. Class 9" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold small">Section *</label>
+            <input type="text" name="section" class="form-control" placeholder="e.g. A" value="A" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold small">Academic Year *</label>
+            <input type="text" name="academic_year" class="form-control" placeholder="e.g. 2027-28" value="2027-28" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold small">Class Teacher (Optional)</label>
+            <select name="teacher_id" class="form-select">
+              <option value="">-- None / Unassigned --</option>
+              <% if(typeof teachers !== 'undefined') { %>
+                <% teachers.forEach(t => { %>
+                  <option value="<%- t.id %>"><%- t.name %></option>
+                <% }) %>
+              <% } %>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer bg-light py-2">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary fw-bold">
+            <i class="fa-solid fa-save me-1"></i>Create Class &amp; Continue
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  function updateSelectionSummary() {
+    const checkboxes = document.querySelectorAll('.student-checkbox');
+    let selectedCount = 0;
+    checkboxes.forEach(cb => {
+      if (cb.checked) selectedCount++;
+    });
+
+    const display = document.getElementById('selectedCountDisplay');
+    if (display) display.textContent = selectedCount;
+
+    const btnDisplay = document.getElementById('btnSelectedCount');
+    if (btnDisplay) btnDisplay.textContent = selectedCount;
+
+    const modalCount = document.getElementById('modalStudentCount');
+    if (modalCount) modalCount.textContent = selectedCount;
+  }
+
+  function toggleMaster(masterCb) {
+    const checkboxes = document.querySelectorAll('.student-checkbox');
+    checkboxes.forEach(cb => {
+      cb.checked = masterCb.checked;
+    });
+    updateSelectionSummary();
+  }
+
+  function selectAll(state) {
+    const checkboxes = document.querySelectorAll('.student-checkbox');
+    checkboxes.forEach(cb => {
+      cb.checked = state;
+    });
+    const master = document.getElementById('masterCheckbox');
+    if (master) master.checked = state;
+    updateSelectionSummary();
+  }
+
+  function selectPassedOnly() {
+    const checkboxes = document.querySelectorAll('.student-checkbox');
+    checkboxes.forEach(cb => {
+      cb.checked = (cb.getAttribute('data-pass') === '1');
+    });
+    updateSelectionSummary();
+  }
+
+  function resequenceRollNumbers() {
+    const rows = document.querySelectorAll('.student-row');
+    let currentRoll = 1;
+    rows.forEach(r => {
+      const cb = r.querySelector('.student-checkbox');
+      if (cb && cb.checked) {
+        const rollInput = r.querySelector('.new-roll-input');
+        if (rollInput) {
+          rollInput.value = currentRoll++;
+        }
+      }
+    });
+  }
+
+  function setBulkOptional(val) {
+    const selects = document.querySelectorAll('.optional-subject-select');
+    selects.forEach(sel => {
+      sel.value = val;
+    });
+  }
+
+  function promptPromotionConfirmation() {
+    const checkboxes = document.querySelectorAll('.student-checkbox:checked');
+    if (checkboxes.length === 0) {
+      alert('Please select at least one student to promote.');
+      return;
+    }
+
+    const carryCheck = document.getElementById('carryForwardFeesCheck');
+    const modalFee = document.getElementById('modalFeeStatus');
+    if (modalFee && carryCheck) {
+      modalFee.textContent = carryCheck.checked ? 'Yes (Carry forward to new balance)' : 'No (Reset/Separate)';
+    }
+
+    updateSelectionSummary();
+    const modal = new bootstrap.Modal(document.getElementById('confirmPromotionModal'));
+    modal.show();
+  }
+
+  // Initialize summary on page load
+  document.addEventListener('DOMContentLoaded', () => {
+    updateSelectionSummary();
+  });
+</script>

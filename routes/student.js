@@ -5,6 +5,9 @@ const { isAuthenticated } = require('../middleware/auth');
 const moment = require('moment');
 const { generateFeeReceiptPDF } = require('../utils/receiptPdf');
 const { getPendingFeeReport } = require('../utils/feeReport');
+const { getStudentFullAcademicHistory } = require('../utils/promotionHelper');
+const { generateReportCardPDF } = require('../utils/reportCardPdf');
+const { calculateClassRanks } = require('../utils/examRankHelper');
 
 router.use(isAuthenticated);
 router.use((req, res, next) => {
@@ -120,6 +123,25 @@ router.get('/profile', async (req, res) => {
     });
   } catch (err) {
     console.error('Profile error:', err);
+    res.redirect('/student');
+  }
+});
+
+// ==================== ACADEMIC & FEE HISTORY ====================
+router.get('/history', async (req, res) => {
+  try {
+    const student = await getStudentForUser(req.session.user.id);
+    if (!student) return res.redirect('/student');
+
+    const historyData = await getStudentFullAcademicHistory(student.id);
+
+    res.render('student/history', {
+      title: 'My Academic & Fee History',
+      student,
+      ...historyData
+    });
+  } catch (err) {
+    console.error('Student academic history error:', err);
     res.redirect('/student');
   }
 });
@@ -562,5 +584,47 @@ const restrictResults = (req, res) => {
 router.get('/results', restrictResults);
 router.get('/results/:examId', restrictResults);
 router.get('/results/:examId/download', restrictResults);
+
+// Download official report card PDF for student's own verified exam
+router.get('/results/report-card/:studentId/:examId', async (req, res) => {
+  try {
+    const studentUser = await getStudentForUser(req.session.user.id);
+    if (!studentUser || studentUser.id !== parseInt(req.params.studentId, 10)) {
+      return res.status(403).send('Unauthorized access to report card');
+    }
+
+    const [exams] = await db.query('SELECT * FROM exams WHERE id=?', [req.params.examId]);
+    if (!exams.length) return res.status(404).send('Exam not found');
+    const currentExam = exams[0];
+
+    const examClassId = currentExam.class_id;
+    const [examClassRows] = await db.query('SELECT name, section, academic_year FROM classes WHERE id=?', [examClassId]);
+    if (examClassRows.length) {
+      studentUser.class_name = examClassRows[0].name;
+      studentUser.section = examClassRows[0].section;
+      studentUser.academic_year = examClassRows[0].academic_year;
+    }
+
+    const [subjects] = await db.query('SELECT * FROM subjects WHERE class_id=? ORDER BY name', [examClassId]);
+    const [currentResults] = await db.query('SELECT * FROM results WHERE student_id=? AND exam_id=?', [studentUser.id, currentExam.id]);
+
+    const isAnnual = /annual|3rd|third|final/i.test(currentExam.name) || req.query.consolidated === '1';
+
+    const [allExams] = await db.query('SELECT * FROM exams WHERE class_id=? ORDER BY id ASC', [examClassId]);
+    let allResults = [];
+    if (allExams.length > 0) {
+      const examIds = allExams.map(e => e.id);
+      const [resRows] = await db.query('SELECT * FROM results WHERE student_id=? AND exam_id IN (?)', [studentUser.id, examIds]);
+      allResults = resRows;
+    }
+
+    const { ranksMap } = await calculateClassRanks(examClassId, currentExam.id, isAnnual);
+
+    generateReportCardPDF(res, studentUser, currentExam, subjects, currentResults, ranksMap, allExams, allResults);
+  } catch (err) {
+    console.error('Error generating student report card:', err);
+    res.status(500).send('Error generating report card: ' + err.message);
+  }
+});
 
 module.exports = router;

@@ -181,6 +181,32 @@ CREATE TABLE IF NOT EXISTS timetable (
   FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE SET NULL
 );
 
+-- Student Academic & Promotion History Table (Historical archive of classes, marks, and fees)
+CREATE TABLE IF NOT EXISTS student_academic_history (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  student_id INT NOT NULL,
+  class_id INT NOT NULL,
+  class_name VARCHAR(50) NOT NULL,
+  section VARCHAR(10) NOT NULL,
+  academic_year VARCHAR(20) NOT NULL,
+  roll_number INT NULL,
+  optional_subject VARCHAR(100) NULL,
+  total_marks_obtained DECIMAL(7,2) DEFAULT NULL,
+  total_max_marks DECIMAL(7,2) DEFAULT NULL,
+  final_percentage DECIMAL(5,2) DEFAULT NULL,
+  final_result_status VARCHAR(50) DEFAULT 'Promoted',
+  fee_balance_carried DECIMAL(10,2) DEFAULT 0.00,
+  promoted_to_class_id INT NULL,
+  promoted_to_academic_year VARCHAR(20) NULL,
+  promoted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  promoted_by INT NULL,
+  remarks VARCHAR(255) NULL,
+  INDEX idx_hist_student (student_id),
+  INDEX idx_hist_class (class_id),
+  INDEX idx_hist_year (academic_year),
+  FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE
+);
+
 -- Default admin user (password: admin123)
 -- Hash generated with bcrypt.hash('admin123', 10)
 INSERT IGNORE INTO users (name, email, password, role) VALUES

@@ -20,6 +20,7 @@ const { getPendingFeeReport } = require('../utils/feeReport');
 const { generateSqlBackup } = require('../utils/dbBackup');
 const { getSettings, updateSettings } = require('../utils/settingsHelper');
 const { isSubjectApplicableToStudent, generateMarksCSVTemplate, parseMarksCSV } = require('../utils/csvMarksHelper');
+const { getPromotionStudentsData, executeBatchPromotion, getStudentFullAcademicHistory } = require('../utils/promotionHelper');
 
 // Configure Multer for student profile photo uploads
 const uploadDir = path.join(__dirname, '../public/uploads/students');
@@ -499,6 +500,140 @@ router.post('/students/delete/:id', async (req, res) => {
   } catch (err) { console.error(err); req.flash('error_msg', 'Error deleting student'); res.redirect('/admin/students'); }
 });
 
+// ==================== STUDENT PROMOTION & SESSION MIGRATION ====================
+router.get('/students/promote', async (req, res) => {
+  try {
+    const sourceClassId = req.query.source_class_id ? parseInt(req.query.source_class_id, 10) : null;
+    const targetClassId = req.query.target_class_id ? parseInt(req.query.target_class_id, 10) : null;
+
+    const [classes] = await db.query('SELECT * FROM classes ORDER BY name, section');
+    const [teachers] = await db.query('SELECT t.id, u.name FROM teachers t JOIN users u ON t.user_id = u.id ORDER BY u.name');
+
+    let students = [];
+    let sourceClass = null;
+    let targetClass = null;
+
+    if (sourceClassId) {
+      sourceClass = classes.find(c => c.id === sourceClassId) || null;
+      if (sourceClass) {
+        students = await getPromotionStudentsData(sourceClassId);
+      }
+    }
+
+    if (targetClassId) {
+      targetClass = classes.find(c => c.id === targetClassId) || null;
+    }
+
+    res.render('admin/student-promote', {
+      title: 'Promote Students',
+      classes,
+      teachers,
+      sourceClassId,
+      targetClassId,
+      sourceClass,
+      targetClass,
+      students
+    });
+  } catch (err) {
+    console.error('Promote page error:', err);
+    req.flash('error_msg', 'Error loading promotion page: ' + err.message);
+    res.redirect('/admin/students');
+  }
+});
+
+router.post('/students/promote', async (req, res) => {
+  const connection = await db.getConnection();
+  try {
+    const {
+      source_class_id,
+      target_class_id,
+      target_academic_year,
+      carry_forward_fees,
+      selected_students,
+      new_roll_numbers = {},
+      optional_subjects = {},
+      promotion_remarks
+    } = req.body;
+
+    const sClassId = parseInt(source_class_id, 10);
+    const tClassId = parseInt(target_class_id, 10);
+
+    if (!sClassId || !tClassId) {
+      req.flash('error_msg', 'Please select both source class and target class for promotion.');
+      return res.redirect('/admin/students/promote');
+    }
+
+    if (sClassId === tClassId) {
+      req.flash('error_msg', 'Source class and target class cannot be the same class.');
+      return res.redirect(`/admin/students/promote?source_class_id=${sClassId}`);
+    }
+
+    const studentIds = Array.isArray(selected_students)
+      ? selected_students.map(id => parseInt(id, 10)).filter(Boolean)
+      : (selected_students ? [parseInt(selected_students, 10)].filter(Boolean) : []);
+
+    if (studentIds.length === 0) {
+      req.flash('error_msg', 'Please select at least one student to promote.');
+      return res.redirect(`/admin/students/promote?source_class_id=${sClassId}&target_class_id=${tClassId}`);
+    }
+
+    const studentPromotions = studentIds.map(sId => ({
+      studentId: sId,
+      newRollNumber: new_roll_numbers[sId] || null,
+      optionalSubject: optional_subjects[sId] !== undefined ? optional_subjects[sId] : null
+    }));
+
+    await connection.beginTransaction();
+
+    const result = await executeBatchPromotion({
+      connection,
+      sourceClassId: sClassId,
+      targetClassId: tClassId,
+      targetAcademicYear: target_academic_year,
+      carryForwardFees: carry_forward_fees === '1' || carry_forward_fees === true || carry_forward_fees === 'on',
+      studentPromotions,
+      adminUserId: req.session.user.id,
+      promotionRemarks: promotion_remarks
+    });
+
+    await connection.commit();
+
+    req.flash(
+      'success_msg',
+      `🎉 Successfully promoted ${result.promotedCount} students from ${result.sourceClass.name} - ${result.sourceClass.section} to ${result.targetClass.name} - ${result.targetClass.section} (${result.promoYear})!`
+    );
+    res.redirect(`/admin/classes/student-list?class_id=${tClassId}`);
+  } catch (err) {
+    await connection.rollback();
+    console.error('Promotion transaction error:', err);
+    req.flash('error_msg', 'Promotion error: ' + err.message);
+    res.redirect(`/admin/students/promote?source_class_id=${req.body.source_class_id || ''}`);
+  } finally {
+    connection.release();
+  }
+});
+
+// ==================== STUDENT ACADEMIC & FEE HISTORY ====================
+router.get('/students/history/:id', async (req, res) => {
+  try {
+    const studentId = parseInt(req.params.id, 10);
+    const historyData = await getStudentFullAcademicHistory(studentId);
+    if (!historyData) {
+      req.flash('error_msg', 'Student not found');
+      return res.redirect('/admin/students');
+    }
+
+    res.render('admin/student-history', {
+      title: `${historyData.student.student_name} - Academic & Fee History`,
+      ...historyData
+    });
+  } catch (err) {
+    console.error('Student history page error:', err);
+    req.flash('error_msg', 'Error retrieving academic history: ' + err.message);
+    res.redirect('/admin/students');
+  }
+});
+
 // ==================== TEACHERS ====================
 router.get('/teachers', async (req, res) => {
   const [teachers] = await db.query(`SELECT t.*, u.name, u.email, u.phone, u.is_active FROM teachers t JOIN users u ON t.user_id=u.id ORDER BY t.id DESC`);
@@ -575,12 +710,12 @@ router.get('/classes', async (req, res) => {
 });
 
 router.post('/classes/add', async (req, res) => {
-  const { name, section, teacher_id, academic_year } = req.body;
+  const { name, section, teacher_id, academic_year, return_to } = req.body;
   try {
     await db.query('INSERT INTO classes (name,section,teacher_id,academic_year) VALUES (?,?,?,?)', [name, section, teacher_id || null, academic_year]);
-    req.flash('success_msg', 'Class added');
-    res.redirect('/admin/classes');
-  } catch (err) { req.flash('error_msg', 'Error: ' + err.message); res.redirect('/admin/classes'); }
+    req.flash('success_msg', 'Class added successfully');
+    res.redirect(return_to || '/admin/classes');
+  } catch (err) { req.flash('error_msg', 'Error: ' + err.message); res.redirect(return_to || '/admin/classes'); }
 });
 
 router.post('/classes/delete/:id', async (req, res) => {
@@ -1643,13 +1778,22 @@ router.get('/results/report-card/:studentId/:examId', async (req, res) => {
     if (!exams.length) return res.status(404).send('Exam not found');
     const currentExam = exams[0];
 
-    const [subjects] = await db.query('SELECT * FROM subjects WHERE class_id=? ORDER BY name', [student.class_id]);
+    const examClassId = currentExam.class_id;
+    // Preserve historical class details for this specific exam (supports promoted students)
+    const [examClassRows] = await db.query('SELECT name, section, academic_year FROM classes WHERE id=?', [examClassId]);
+    if (examClassRows.length) {
+      student.class_name = examClassRows[0].name;
+      student.section = examClassRows[0].section;
+      student.academic_year = examClassRows[0].academic_year;
+    }
+
+    const [subjects] = await db.query('SELECT * FROM subjects WHERE class_id=? ORDER BY name', [examClassId]);
     const [currentResults] = await db.query('SELECT * FROM results WHERE student_id=? AND exam_id=?', [student.id, currentExam.id]);
 
     const isAnnual = /annual|3rd|third|final/i.test(currentExam.name) || req.query.consolidated === '1';
 
     // Retrieve all exams for the class to populate side-by-side terms if annual or consolidated
-    const [allExams] = await db.query('SELECT * FROM exams WHERE class_id=? ORDER BY id ASC', [student.class_id]);
+    const [allExams] = await db.query('SELECT * FROM exams WHERE class_id=? ORDER BY id ASC', [examClassId]);
     let allResults = [];
     if (allExams.length > 0) {
       const examIds = allExams.map(e => e.id);
@@ -1657,7 +1801,7 @@ router.get('/results/report-card/:studentId/:examId', async (req, res) => {
       allResults = resRows;
     }
 
-    const { ranksMap } = await calculateClassRanks(student.class_id, currentExam.id, isAnnual);
+    const { ranksMap } = await calculateClassRanks(examClassId, currentExam.id, isAnnual);
 
     generateReportCardPDF(res, student, currentExam, subjects, currentResults, ranksMap, allExams, allResults);
   } catch (err) {

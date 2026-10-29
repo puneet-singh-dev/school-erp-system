@@ -10,14 +10,25 @@ const { isSubjectApplicableToStudent } = require('./csvMarksHelper');
 async function calculateClassRanks(classId, targetExamId = null, isConsolidated = false) {
   if (!classId) return { ranksMap: {}, topThree: [] };
 
-  const [students] = await db.query(
-    `SELECT s.id, u.name, s.admission_no, s.roll_number, s.optional_subject
-     FROM students s
-     JOIN users u ON s.user_id = u.id
-     WHERE s.class_id = ?
-     ORDER BY (s.roll_number IS NULL OR s.roll_number = 0), s.roll_number ASC, u.name ASC`,
-    [classId]
-  );
+  // Fetch students currently in this class, or students who took this exam/class previously (historical archive support)
+  let studentQuery = `
+    SELECT DISTINCT s.id, u.name, s.admission_no, s.roll_number, s.optional_subject
+    FROM students s
+    JOIN users u ON s.user_id = u.id
+    WHERE s.class_id = ?
+  `;
+  const studentParams = [classId];
+
+  if (targetExamId && !isConsolidated) {
+    studentQuery += ` OR s.id IN (SELECT student_id FROM results WHERE exam_id = ?)`;
+    studentParams.push(targetExamId);
+  } else if (isConsolidated) {
+    studentQuery += ` OR s.id IN (SELECT r.student_id FROM results r JOIN exams e ON r.exam_id = e.id WHERE e.class_id = ?)`;
+    studentParams.push(classId);
+  }
+
+  studentQuery += ` ORDER BY (s.roll_number IS NULL OR s.roll_number = 0), s.roll_number ASC, u.name ASC`;
+  const [students] = await db.query(studentQuery, studentParams);
   if (!students.length) return { ranksMap: {}, topThree: [] };
 
   const [subjects] = await db.query('SELECT * FROM subjects WHERE class_id = ?', [classId]);
