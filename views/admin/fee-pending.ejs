@@ -129,7 +129,12 @@
             <td class="text-end pe-3">
               <div class="btn-group">
                 <button type="button" class="btn btn-sm btn-outline-success" 
-                        onclick="openStudentMarkPaidModal('<%- f.student_id %>', '<%- f.name.replace(/'/g, &quot;\\'&quot;) %>', '<%- f.admission_no %>', '<%- (f.unpaid_months || []).join(&quot;,&quot;) %>', '<%- f.previous_balance || 0 %>')" 
+                        data-student-id="<%- f.student_id %>"
+                        data-student-name="<%- f.name %>"
+                        data-admission-no="<%- f.admission_no %>"
+                        data-unpaid-months="<%- (f.unpaid_months || []).join(',') %>"
+                        data-previous-balance="<%- f.previous_balance || 0 %>"
+                        onclick="handleMarkPaidClick(this)" 
                         title="Mark Pre-ERP / Offline Fees as Paid">
                   <i class="fa-solid fa-circle-check"></i> Mark Paid
                 </button>
@@ -323,6 +328,15 @@
 
 <script>
   let currentUnpaidMonths = [];
+
+  function handleMarkPaidClick(btn) {
+    const studentId = btn.getAttribute('data-student-id');
+    const studentName = btn.getAttribute('data-student-name');
+    const admissionNo = btn.getAttribute('data-admission-no');
+    const unpaidMonthsStr = btn.getAttribute('data-unpaid-months');
+    const prevBal = btn.getAttribute('data-previous-balance');
+    openStudentMarkPaidModal(studentId, studentName, admissionNo, unpaidMonthsStr, prevBal);
+  }
 
   function openStudentMarkPaidModal(studentId, studentName, admissionNo, unpaidMonthsStr, prevBal) {
     document.getElementById('modalStudentId').value = studentId;
