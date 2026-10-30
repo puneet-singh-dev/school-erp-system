@@ -53,9 +53,14 @@
         Session Months Checked: <strong><%- expectedMonths.join(', ') %></strong>
       </div>
     </div>
-    <a href="/admin/fees/reminder-class/<%- class_id %>?up_to_month=<%- targetMonth %>" target="_blank" class="btn btn-warning btn-sm shadow-sm fw-semibold">
-      <i class="fa-solid fa-file-pdf me-1"></i>Print Fee Notices (4 per A4 Sheet)
-    </a>
+    <div class="d-flex flex-wrap gap-2">
+      <button type="button" class="btn btn-success btn-sm shadow-sm fw-semibold" data-bs-toggle="modal" data-bs-target="#bulkMarkPaidModal">
+        <i class="fa-solid fa-check-double me-1"></i>Bulk Mark Months as Paid (Pre-ERP)
+      </button>
+      <a href="/admin/fees/reminder-class/<%- class_id %>?up_to_month=<%- targetMonth %>" target="_blank" class="btn btn-warning btn-sm shadow-sm fw-semibold">
+        <i class="fa-solid fa-file-pdf me-1"></i>Print Fee Notices (4 per A4 Sheet)
+      </a>
+    </div>
   </div>
   <div class="card-body p-0">
     <div class="table-responsive">
@@ -123,6 +128,11 @@
             </td>
             <td class="text-end pe-3">
               <div class="btn-group">
+                <button type="button" class="btn btn-sm btn-outline-success" 
+                        onclick="openStudentMarkPaidModal('<%- f.student_id %>', '<%- f.name.replace(/'/g, &quot;\\'&quot;) %>', '<%- f.admission_no %>', '<%- (f.unpaid_months || []).join(&quot;,&quot;) %>', '<%- f.previous_balance || 0 %>')" 
+                        title="Mark Pre-ERP / Offline Fees as Paid">
+                  <i class="fa-solid fa-circle-check"></i> Mark Paid
+                </button>
                 <a href="/admin/fees/reminder/<%- f.student_id %>?up_to_month=<%- targetMonth %>" target="_blank" class="btn btn-sm btn-outline-warning" title="Print Fee Reminder Notice (A4 Slip)">
                   <i class="fa-solid fa-file-pdf"></i> Notice
                 </a>
@@ -155,3 +165,222 @@
   </div>
 </div>
 <% } %>
+
+<!-- ==================== MODAL: INDIVIDUAL STUDENT MARK AS PAID ==================== -->
+<div class="modal fade" id="studentMarkPaidModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <form action="/admin/fees/mark-paid" method="POST">
+        <input type="hidden" name="student_id" id="modalStudentId">
+        <input type="hidden" name="class_id" value="<%- class_id || '' %>">
+        <input type="hidden" name="return_to" value="/admin/fees/pending?class_id=<%- class_id || '' %>&up_to_month=<%- targetMonth || '' %>">
+
+        <div class="modal-header bg-success text-white py-3">
+          <h6 class="modal-title fw-bold">
+            <i class="fa-solid fa-circle-check me-2"></i>Mark Pre-ERP / Offline Fees as Paid
+          </h6>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <div class="modal-body p-4">
+          <div class="p-3 bg-light rounded border mb-3">
+            <div class="fw-bold text-dark fs-6" id="modalStudentName">-</div>
+            <div class="small text-muted">Admission No: <strong id="modalStudentAdm">-</strong></div>
+          </div>
+
+          <label class="form-label fw-bold small text-dark mb-2">
+            Select Months to Mark as Paid:
+          </label>
+          <div class="d-flex flex-wrap gap-1 mb-2">
+            <button type="button" class="btn btn-xs btn-outline-primary" onclick="selectQuickMonths('pre_erp')">
+              Apr to Sep (Pre-ERP)
+            </button>
+            <button type="button" class="btn btn-xs btn-outline-secondary" onclick="selectQuickMonths('all')">
+              All Pending
+            </button>
+            <button type="button" class="btn btn-xs btn-outline-dark" onclick="selectQuickMonths('none')">
+              Clear All
+            </button>
+          </div>
+
+          <div class="row g-2 mb-3 border rounded p-2 bg-white" id="modalMonthsContainer">
+            <% sessionMonthsOrder.forEach(m => { %>
+              <div class="col-4 col-sm-3">
+                <div class="form-check">
+                  <input class="form-check-input single-month-cb" type="checkbox" name="months_paid" value="<%- m %>" id="mcb_<%- m %>">
+                  <label class="form-check-label small fw-semibold" for="mcb_<%- m %>"><%- m %></label>
+                </div>
+              </div>
+            <% }) %>
+          </div>
+
+          <!-- Clear Previous Balance Option -->
+          <div class="form-check mb-3 p-2 bg-light rounded border" id="modalPrevBalWrapper" style="display: none;">
+            <input class="form-check-input ms-1" type="checkbox" name="clear_previous_balance" value="1" id="modalClearPrevBal">
+            <label class="form-check-label small fw-bold text-danger ms-2" for="modalClearPrevBal">
+              Also mark Previous Balance as Paid / Settled (<span id="modalPrevBalAmount">₹0</span>)
+            </label>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Payment / Settlement Date:</label>
+            <input type="date" name="payment_date" class="form-control form-control-sm" value="<%- new Date().toISOString().split('T')[0] %>">
+          </div>
+
+          <div class="mb-0">
+            <label class="form-label small fw-semibold">Remarks:</label>
+            <input type="text" name="remarks" class="form-control form-control-sm" value="Pre-ERP Fee Paid (Settled Offline prior to ERP implementation)">
+          </div>
+        </div>
+
+        <div class="modal-footer bg-light py-2">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-success btn-sm fw-bold px-4">
+            <i class="fa-solid fa-check me-1"></i>Confirm &amp; Mark as Paid
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== MODAL: BULK CLASS MARK AS PAID (PRE-ERP) ==================== -->
+<div class="modal fade" id="bulkMarkPaidModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <form action="/admin/fees/mark-paid-bulk" method="POST">
+        <input type="hidden" name="class_id" value="<%- class_id || '' %>">
+
+        <div class="modal-header bg-success text-white py-3">
+          <h6 class="modal-title fw-bold">
+            <i class="fa-solid fa-check-double me-2"></i>Bulk Mark Months as Paid for Entire Class
+          </h6>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <div class="modal-body p-4">
+          <div class="alert alert-info py-2 small mb-3">
+            <i class="fa-solid fa-circle-info me-1"></i>
+            Use this tool when students paid their school fees offline before the ERP started in October. Selected months will be recorded as paid for all enrolled students in this class.
+          </div>
+
+          <label class="form-label fw-bold small text-dark mb-2">
+            Select Pre-ERP Months to Mark as Paid:
+          </label>
+          <div class="d-flex flex-wrap gap-1 mb-2">
+            <button type="button" class="btn btn-xs btn-outline-primary" onclick="setBulkMonths('pre_erp')">
+              Apr to Sep (Pre-ERP Months)
+            </button>
+            <button type="button" class="btn btn-xs btn-outline-secondary" onclick="setBulkMonths('all')">
+              All 12 Months
+            </button>
+            <button type="button" class="btn btn-xs btn-outline-dark" onclick="setBulkMonths('none')">
+              Clear All
+            </button>
+          </div>
+
+          <div class="row g-2 mb-3 border rounded p-2 bg-white">
+            <% sessionMonthsOrder.forEach(m => { 
+                 const isPreErp = ['APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP'].includes(m);
+            %>
+              <div class="col-4 col-sm-3">
+                <div class="form-check">
+                  <input class="form-check-input bulk-month-cb" type="checkbox" name="months_paid" value="<%- m %>" id="bmcb_<%- m %>" <%- isPreErp ? 'checked' : '' %>>
+                  <label class="form-check-label small fw-semibold" for="bmcb_<%- m %>"><%- m %></label>
+                </div>
+              </div>
+            <% }) %>
+          </div>
+
+          <div class="form-check mb-3 p-2 bg-light rounded border">
+            <input class="form-check-input ms-1" type="checkbox" name="clear_previous_balance" value="1" id="bulkClearPrevBal">
+            <label class="form-check-label small fw-bold text-dark ms-2" for="bulkClearPrevBal">
+              Also clear / settle Previous Balance for all students in this class
+            </label>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Settlement Date:</label>
+            <input type="date" name="payment_date" class="form-control form-control-sm" value="<%- new Date().toISOString().split('T')[0] %>">
+          </div>
+
+          <div class="mb-0">
+            <label class="form-label small fw-semibold">Remarks:</label>
+            <input type="text" name="remarks" class="form-control form-control-sm" value="Pre-ERP Fee Paid Offline (Class Bulk Update)">
+          </div>
+        </div>
+
+        <div class="modal-footer bg-light py-2">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-success btn-sm fw-bold px-4">
+            <i class="fa-solid fa-check-double me-1"></i>Apply to Entire Class
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  let currentUnpaidMonths = [];
+
+  function openStudentMarkPaidModal(studentId, studentName, admissionNo, unpaidMonthsStr, prevBal) {
+    document.getElementById('modalStudentId').value = studentId;
+    document.getElementById('modalStudentName').textContent = studentName;
+    document.getElementById('modalStudentAdm').textContent = admissionNo;
+
+    currentUnpaidMonths = unpaidMonthsStr ? unpaidMonthsStr.split(',').map(m => m.trim().toUpperCase()) : [];
+
+    const checkboxes = document.querySelectorAll('.single-month-cb');
+    checkboxes.forEach(cb => {
+      cb.checked = currentUnpaidMonths.includes(cb.value.toUpperCase());
+    });
+
+    const prevBalFloat = parseFloat(prevBal) || 0;
+    const prevWrapper = document.getElementById('modalPrevBalWrapper');
+    const prevCb = document.getElementById('modalClearPrevBal');
+    const prevAmt = document.getElementById('modalPrevBalAmount');
+    if (prevBalFloat > 0) {
+      prevWrapper.style.display = 'block';
+      prevCb.checked = true;
+      prevAmt.textContent = '₹' + prevBalFloat.toLocaleString('en-IN');
+    } else {
+      prevWrapper.style.display = 'none';
+      prevCb.checked = false;
+    }
+
+    const modal = new bootstrap.Modal(document.getElementById('studentMarkPaidModal'));
+    modal.show();
+  }
+
+  function selectQuickMonths(mode) {
+    const preErpList = ['APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP'];
+    const checkboxes = document.querySelectorAll('.single-month-cb');
+    checkboxes.forEach(cb => {
+      const val = cb.value.toUpperCase();
+      if (mode === 'pre_erp') {
+        cb.checked = preErpList.includes(val) && currentUnpaidMonths.includes(val);
+      } else if (mode === 'all') {
+        cb.checked = currentUnpaidMonths.includes(val);
+      } else if (mode === 'none') {
+        cb.checked = false;
+      }
+    });
+  }
+
+  function setBulkMonths(mode) {
+    const preErpList = ['APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP'];
+    const checkboxes = document.querySelectorAll('.bulk-month-cb');
+    checkboxes.forEach(cb => {
+      const val = cb.value.toUpperCase();
+      if (mode === 'pre_erp') {
+        cb.checked = preErpList.includes(val);
+      } else if (mode === 'all') {
+        cb.checked = true;
+      } else if (mode === 'none') {
+        cb.checked = false;
+      }
+    });
+  }
+</script>
+

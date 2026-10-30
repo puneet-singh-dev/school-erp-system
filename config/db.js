@@ -331,6 +331,20 @@ async function ensureSchema() {
       // Ignore if already nullable or constrained
     }
 
+    // Allow flexible payment modes (e.g. Offline / Pre-ERP Settlement)
+    try {
+      await pool.query(`ALTER TABLE fee_payments MODIFY COLUMN payment_mode VARCHAR(50) DEFAULT 'Cash'`);
+    } catch (e) {
+      // Ignore if constrained
+    }
+
+    // Expand academic_year in classes table for flexible session formats
+    try {
+      await pool.query(`ALTER TABLE classes MODIFY COLUMN academic_year VARCHAR(30) NOT NULL`);
+    } catch (e) {
+      // Ignore if already widened
+    }
+
     // 1. Gallery Table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS gallery (

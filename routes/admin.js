@@ -20,7 +20,12 @@ const { getPendingFeeReport } = require('../utils/feeReport');
 const { generateSqlBackup } = require('../utils/dbBackup');
 const { getSettings, updateSettings } = require('../utils/settingsHelper');
 const { isSubjectApplicableToStudent, generateMarksCSVTemplate, parseMarksCSV } = require('../utils/csvMarksHelper');
-const { getPromotionStudentsData, executeBatchPromotion, getStudentFullAcademicHistory } = require('../utils/promotionHelper');
+const { 
+  getPromotionStudentsData, 
+  getSchoolWidePromotionPlan, 
+  executeSchoolWideAcademicTransition, 
+  getStudentFullAcademicHistory 
+} = require('../utils/promotionHelper');
 
 // Configure Multer for student profile photo uploads
 const uploadDir = path.join(__dirname, '../public/uploads/students');
@@ -500,43 +505,17 @@ router.post('/students/delete/:id', async (req, res) => {
   } catch (err) { console.error(err); req.flash('error_msg', 'Error deleting student'); res.redirect('/admin/students'); }
 });
 
-// ==================== STUDENT PROMOTION & SESSION MIGRATION ====================
+// ==================== ACADEMIC YEAR TRANSITION & SCHOOL-WIDE PROMOTION ====================
 router.get('/students/promote', async (req, res) => {
   try {
-    const sourceClassId = req.query.source_class_id ? parseInt(req.query.source_class_id, 10) : null;
-    const targetClassId = req.query.target_class_id ? parseInt(req.query.target_class_id, 10) : null;
-
-    const [classes] = await db.query('SELECT * FROM classes ORDER BY name, section');
-    const [teachers] = await db.query('SELECT t.id, u.name FROM teachers t JOIN users u ON t.user_id = u.id ORDER BY u.name');
-
-    let students = [];
-    let sourceClass = null;
-    let targetClass = null;
-
-    if (sourceClassId) {
-      sourceClass = classes.find(c => c.id === sourceClassId) || null;
-      if (sourceClass) {
-        students = await getPromotionStudentsData(sourceClassId);
-      }
-    }
-
-    if (targetClassId) {
-      targetClass = classes.find(c => c.id === targetClassId) || null;
-    }
-
+    const plan = await getSchoolWidePromotionPlan(req.query.academic_year);
     res.render('admin/student-promote', {
-      title: 'Promote Students',
-      classes,
-      teachers,
-      sourceClassId,
-      targetClassId,
-      sourceClass,
-      targetClass,
-      students
+      title: 'Academic Year Transition & School-Wide Promotion',
+      ...plan
     });
   } catch (err) {
-    console.error('Promote page error:', err);
-    req.flash('error_msg', 'Error loading promotion page: ' + err.message);
+    console.error('Promotion plan page error:', err);
+    req.flash('error_msg', 'Error loading academic year transition: ' + err.message);
     res.redirect('/admin/students');
   }
 });
@@ -545,69 +524,58 @@ router.post('/students/promote', async (req, res) => {
   const connection = await db.getConnection();
   try {
     const {
-      source_class_id,
-      target_class_id,
-      target_academic_year,
+      current_academic_year,
+      new_academic_year,
       carry_forward_fees,
-      selected_students,
+      decision = {},
       new_roll_numbers = {},
       optional_subjects = {},
-      promotion_remarks
+      transition_remarks
     } = req.body;
 
-    const sClassId = parseInt(source_class_id, 10);
-    const tClassId = parseInt(target_class_id, 10);
-
-    if (!sClassId || !tClassId) {
-      req.flash('error_msg', 'Please select both source class and target class for promotion.');
+    if (!new_academic_year || !new_academic_year.trim()) {
+      req.flash('error_msg', 'Please specify a valid Target Academic Session (e.g. 2027-28).');
       return res.redirect('/admin/students/promote');
     }
 
-    if (sClassId === tClassId) {
-      req.flash('error_msg', 'Source class and target class cannot be the same class.');
-      return res.redirect(`/admin/students/promote?source_class_id=${sClassId}`);
+    // Build student decisions map
+    const studentDecisions = {};
+    for (const [sIdStr, dec] of Object.entries(decision)) {
+      const sId = parseInt(sIdStr, 10);
+      if (sId) {
+        studentDecisions[sId] = {
+          decision: dec,
+          newRollNumber: new_roll_numbers[sId] || null,
+          optionalSubject: optional_subjects[sId] !== undefined ? optional_subjects[sId] : null
+        };
+      }
     }
-
-    const studentIds = Array.isArray(selected_students)
-      ? selected_students.map(id => parseInt(id, 10)).filter(Boolean)
-      : (selected_students ? [parseInt(selected_students, 10)].filter(Boolean) : []);
-
-    if (studentIds.length === 0) {
-      req.flash('error_msg', 'Please select at least one student to promote.');
-      return res.redirect(`/admin/students/promote?source_class_id=${sClassId}&target_class_id=${tClassId}`);
-    }
-
-    const studentPromotions = studentIds.map(sId => ({
-      studentId: sId,
-      newRollNumber: new_roll_numbers[sId] || null,
-      optionalSubject: optional_subjects[sId] !== undefined ? optional_subjects[sId] : null
-    }));
 
     await connection.beginTransaction();
 
-    const result = await executeBatchPromotion({
+    const result = await executeSchoolWideAcademicTransition({
       connection,
-      sourceClassId: sClassId,
-      targetClassId: tClassId,
-      targetAcademicYear: target_academic_year,
+      currentAcademicYear: current_academic_year,
+      newAcademicYear: new_academic_year,
       carryForwardFees: carry_forward_fees === '1' || carry_forward_fees === true || carry_forward_fees === 'on',
-      studentPromotions,
+      studentDecisions,
       adminUserId: req.session.user.id,
-      promotionRemarks: promotion_remarks
+      transitionRemarks: transition_remarks
     });
 
     await connection.commit();
+    try { await updateSettings({ academic_year: result.newAcademicYear }); } catch (ignore) {}
 
     req.flash(
       'success_msg',
-      `🎉 Successfully promoted ${result.promotedCount} students from ${result.sourceClass.name} - ${result.sourceClass.section} to ${result.targetClass.name} - ${result.targetClass.section} (${result.promoYear})!`
+      `🎉 Academic Year Transition to ${result.newAcademicYear} successfully completed! ${result.totalPromoted} students advanced to next grade, ${result.totalRepeated} retained in same class, ${result.totalGraduated} graduated Class 12 alumni safely archived in ${result.currentAcademicYear}, and Class 1 is now fresh & empty for new admissions.`
     );
-    res.redirect(`/admin/classes/student-list?class_id=${tClassId}`);
+    res.redirect('/admin/classes');
   } catch (err) {
     await connection.rollback();
-    console.error('Promotion transaction error:', err);
-    req.flash('error_msg', 'Promotion error: ' + err.message);
-    res.redirect(`/admin/students/promote?source_class_id=${req.body.source_class_id || ''}`);
+    console.error('School-wide transition error:', err);
+    req.flash('error_msg', 'Academic transition error: ' + err.message);
+    res.redirect('/admin/students/promote');
   } finally {
     connection.release();
   }
@@ -1331,6 +1299,177 @@ router.post('/fees/collect', async (req, res) => {
     console.error('Fee collection error:', err);
     req.flash('error_msg', 'Error collecting fee: ' + err.message);
     res.redirect(`/admin/fees/collect?class_id=${class_id}&student_id=${student_id}`);
+  }
+});
+
+// ==================== MARK PRE-ERP / OFFLINE FEES AS PAID ====================
+// Individual student mark as paid
+router.post('/fees/mark-paid', async (req, res) => {
+  try {
+    const { 
+      student_id, 
+      class_id, 
+      months_paid, 
+      clear_previous_balance,
+      payment_date, 
+      payment_mode, 
+      remarks,
+      return_to
+    } = req.body;
+    
+    const sId = parseInt(student_id, 10);
+    if (!sId) {
+      req.flash('error_msg', 'Invalid student selected');
+      return res.redirect(return_to || '/admin/fees/pending');
+    }
+
+    const selectedMonths = Array.isArray(months_paid)
+      ? months_paid
+      : (typeof months_paid === 'string' ? months_paid.split(',').map(m => m.trim()).filter(Boolean) : []);
+    const monthsStr = selectedMonths.join(', ');
+
+    const shouldClearPrev = (clear_previous_balance === '1' || clear_previous_balance === 1 || clear_previous_balance === 'on' || clear_previous_balance === true);
+
+    if (selectedMonths.length === 0 && !shouldClearPrev) {
+      req.flash('error_msg', 'Please select at least one month or choose to clear previous balance.');
+      return res.redirect(return_to || `/admin/fees/pending?class_id=${class_id || ''}`);
+    }
+
+    const [[student]] = await db.query('SELECT s.*, u.name as student_name FROM students s JOIN users u ON s.user_id = u.id WHERE s.id = ?', [sId]);
+    if (!student) {
+      req.flash('error_msg', 'Student not found');
+      return res.redirect(return_to || '/admin/fees/pending');
+    }
+
+    const receiptNo = 'OFFLINE-' + Date.now();
+    const cleanRemarks = (remarks && remarks.trim()) || 'Pre-ERP Fee Settled Offline / Marked as Paid';
+    const pDate = payment_date || new Date().toISOString().split('T')[0];
+    const pMode = payment_mode || 'Offline';
+
+    const breakdown = [];
+    if (monthsStr) {
+      breakdown.push({
+        name: `Pre-ERP Historical Tuition Fee (${monthsStr})`,
+        amount: 0
+      });
+    }
+    if (shouldClearPrev && parseFloat(student.previous_balance || 0) > 0) {
+      breakdown.push({
+        name: `Previous Balance Settled (₹${parseFloat(student.previous_balance).toFixed(2)})`,
+        amount: parseFloat(student.previous_balance)
+      });
+    }
+
+    await db.query(`
+      INSERT INTO fee_payments (
+        student_id, fee_structure_id, amount_paid, payment_date,
+        payment_mode, receipt_no, remarks, months_paid, breakdown_json, collected_by
+      ) VALUES (?, NULL, 0.00, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      sId,
+      pDate,
+      pMode,
+      receiptNo,
+      cleanRemarks,
+      monthsStr || null,
+      JSON.stringify(breakdown),
+      req.session.user.id
+    ]);
+
+    if (shouldClearPrev) {
+      await db.query(
+        'UPDATE students SET previous_balance = 0.00, previous_balance_remarks = ? WHERE id = ?',
+        ['Marked as Paid / Settled Offline (Pre-ERP)', sId]
+      );
+    }
+
+    req.flash('success_msg', `✅ Successfully marked ${monthsStr ? 'months (' + monthsStr + ')' : ''} ${shouldClearPrev ? 'and previous balance' : ''} as paid for ${student.student_name}!`);
+    res.redirect(return_to || `/admin/fees/pending?class_id=${class_id || ''}`);
+  } catch (err) {
+    console.error('Mark as paid error:', err);
+    req.flash('error_msg', 'Error marking fee as paid: ' + err.message);
+    res.redirect('/admin/fees/pending');
+  }
+});
+
+// Bulk class mark as paid
+router.post('/fees/mark-paid-bulk', async (req, res) => {
+  try {
+    const {
+      class_id,
+      months_paid,
+      clear_previous_balance,
+      payment_date,
+      remarks
+    } = req.body;
+
+    const cId = parseInt(class_id, 10);
+    if (!cId) {
+      req.flash('error_msg', 'Please select a valid class for bulk action.');
+      return res.redirect('/admin/fees/pending');
+    }
+
+    const selectedMonths = Array.isArray(months_paid)
+      ? months_paid
+      : (typeof months_paid === 'string' ? months_paid.split(',').map(m => m.trim()).filter(Boolean) : []);
+    const monthsStr = selectedMonths.join(', ');
+    const shouldClearPrev = (clear_previous_balance === '1' || clear_previous_balance === 'on' || clear_previous_balance === true);
+
+    if (selectedMonths.length === 0 && !shouldClearPrev) {
+      req.flash('error_msg', 'Please select at least one month or choose to clear previous balance.');
+      return res.redirect(`/admin/fees/pending?class_id=${cId}`);
+    }
+
+    const [students] = await db.query('SELECT id, previous_balance FROM students WHERE class_id = ?', [cId]);
+    if (!students.length) {
+      req.flash('error_msg', 'No students found in selected class.');
+      return res.redirect(`/admin/fees/pending?class_id=${cId}`);
+    }
+
+    const pDate = payment_date || new Date().toISOString().split('T')[0];
+    const cleanRemarks = (remarks && remarks.trim()) || 'Pre-ERP Fee Settled Offline (Class Bulk Update)';
+
+    let count = 0;
+    for (const s of students) {
+      const receiptNo = 'OFFLINE-' + Date.now() + '-' + s.id;
+      const breakdown = [];
+      if (monthsStr) {
+        breakdown.push({ name: `Pre-ERP Tuition (${monthsStr})`, amount: 0 });
+      }
+      if (shouldClearPrev && parseFloat(s.previous_balance || 0) > 0) {
+        breakdown.push({ name: `Previous Balance Settled (₹${s.previous_balance})`, amount: parseFloat(s.previous_balance) });
+      }
+
+      await db.query(`
+        INSERT INTO fee_payments (
+          student_id, fee_structure_id, amount_paid, payment_date,
+          payment_mode, receipt_no, remarks, months_paid, breakdown_json, collected_by
+        ) VALUES (?, NULL, 0.00, ?, 'Offline', ?, ?, ?, ?, ?)
+      `, [
+        s.id,
+        pDate,
+        receiptNo,
+        cleanRemarks,
+        monthsStr || null,
+        JSON.stringify(breakdown),
+        req.session.user.id
+      ]);
+
+      if (shouldClearPrev && parseFloat(s.previous_balance || 0) > 0) {
+        await db.query(
+          'UPDATE students SET previous_balance = 0.00, previous_balance_remarks = ? WHERE id = ?',
+          ['Marked as Paid / Settled Offline (Pre-ERP)', s.id]
+        );
+      }
+      count++;
+    }
+
+    req.flash('success_msg', `🎉 Successfully marked ${monthsStr ? 'months (' + monthsStr + ')' : ''} as paid for all ${count} students in this class!`);
+    res.redirect(`/admin/fees/pending?class_id=${cId}`);
+  } catch (err) {
+    console.error('Bulk mark as paid error:', err);
+    req.flash('error_msg', 'Error in bulk fee update: ' + err.message);
+    res.redirect(`/admin/fees/pending?class_id=${req.body.class_id || ''}`);
   }
 });
 

@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS classes (
   name VARCHAR(50) NOT NULL,
   section VARCHAR(10) NOT NULL,
   teacher_id INT,
-  academic_year VARCHAR(9) NOT NULL,
+  academic_year VARCHAR(30) NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE SET NULL
 );
@@ -114,7 +114,7 @@ CREATE TABLE IF NOT EXISTS fee_payments (
   fee_structure_id INT NULL,
   amount_paid DECIMAL(10,2) NOT NULL,
   payment_date DATE DEFAULT (CURRENT_DATE),
-  payment_mode ENUM('Cash','Online','Cheque','DD') DEFAULT 'Cash',
+  payment_mode VARCHAR(50) DEFAULT 'Cash',
   receipt_no VARCHAR(50) UNIQUE,
   remarks TEXT,
   months_paid VARCHAR(255) NULL,

@@ -2,6 +2,62 @@ const db = require('../config/db');
 const { isSubjectApplicableToStudent } = require('./csvMarksHelper');
 const { calculateClassRanks } = require('./examRankHelper');
 const { getPendingFeeReport } = require('./feeReport');
+const { getSettings, updateSettings } = require('./settingsHelper');
+
+/**
+ * Extracts a numeric or standard grade rank from class names:
+ * e.g. "Nursery" -> 0.1, "LKG" -> 0.2, "UKG" -> 0.3, "Class 1" -> 1, "Class 12" -> 12
+ */
+function parseGradeLevel(className) {
+  if (!className) return 999;
+  const name = String(className).trim().toLowerCase();
+  if (name.includes('nursery')) return 0.1;
+  if (name.includes('lkg') || name.includes('lower kg')) return 0.2;
+  if (name.includes('ukg') || name.includes('upper kg') || name.includes('kg')) return 0.3;
+
+  const match = name.match(/(?:class|grade|std)?\s*(\d+)/i);
+  if (match) {
+    return parseInt(match[1], 10);
+  }
+  return 999;
+}
+
+/**
+ * Formats a grade rank back into a standard class name
+ */
+function getNextGradeInfo(gradeLevel) {
+  if (gradeLevel === 0.1) return { nextGradeNumber: 0.2, nextGradeName: 'LKG', isGraduating: false };
+  if (gradeLevel === 0.2) return { nextGradeNumber: 0.3, nextGradeName: 'UKG', isGraduating: false };
+  if (gradeLevel === 0.3) return { nextGradeNumber: 1, nextGradeName: 'Class 1', isGraduating: false };
+  if (gradeLevel >= 1 && gradeLevel < 12) {
+    return { nextGradeNumber: gradeLevel + 1, nextGradeName: `Class ${gradeLevel + 1}`, isGraduating: false };
+  }
+  if (gradeLevel >= 12 && gradeLevel < 999) {
+    return { nextGradeNumber: null, nextGradeName: 'Class 12 (Passed Out / Alumni)', isGraduating: true };
+  }
+  return { nextGradeNumber: null, nextGradeName: 'Graduated / Alumni', isGraduating: true };
+}
+
+/**
+ * Generates default next academic year string from current:
+ * e.g. "2026-27" -> "2027-28", "2026-2027" -> "2027-2028"
+ */
+function getSuggestedNextAcademicYear(currentYear) {
+  if (!currentYear) return '2027-28';
+  const match = currentYear.match(/(\d{4})[-/](\d{2,4})/);
+  if (match) {
+    const startYr = parseInt(match[1], 10);
+    const endYrStr = match[2];
+    if (endYrStr.length === 2) {
+      const endYr = parseInt(endYrStr, 10);
+      return `${startYr + 1}-${String((endYr + 1) % 100).padStart(2, '0')}`;
+    } else {
+      const endYr = parseInt(endYrStr, 10);
+      return `${startYr + 1}-${endYr + 1}`;
+    }
+  }
+  return '2027-28';
+}
 
 /**
  * Fetches all students enrolled in a class along with their academic exam performance,
@@ -110,7 +166,7 @@ async function getPromotionStudentsData(sourceClassId) {
       hasExams,
       isPass,
       hasFailed,
-      statusLabel: hasExams ? (isPass ? 'Passed' : 'Failed') : 'No Exams Recorded',
+      statusLabel: hasExams ? (isPass ? 'Passed' : 'Failed') : 'Eligible (No Exam)',
       pendingFee: parseFloat(feeData.balance || 0),
       isFeeCleared: feeData.is_cleared || (parseFloat(feeData.balance || 0) <= 0)
     };
@@ -118,101 +174,390 @@ async function getPromotionStudentsData(sourceClassId) {
 }
 
 /**
- * Executes batch promotion of students from source class to target class.
- * Preserves past class records in `student_academic_history` and updates students.
+ * Prepares the complete school-wide promotion pipeline:
+ * - Orders all active classes from lowest to highest grade (Class 1 -> Class 12)
+ * - Evaluates each student's pass/fail status and pre-selects default actions
+ * - Identifies target next grades, UP Board optional subject requirements, and graduation
  */
-async function executeBatchPromotion({
-  connection,
-  sourceClassId,
-  targetClassId,
-  targetAcademicYear,
-  carryForwardFees = true,
-  studentPromotions = [], // [{ studentId, newRollNumber, optionalSubject }]
-  adminUserId = null,
-  promotionRemarks = null
-}) {
-  const [[sourceClass]] = await connection.query('SELECT * FROM classes WHERE id = ?', [sourceClassId]);
-  const [[targetClass]] = await connection.query('SELECT * FROM classes WHERE id = ?', [targetClassId]);
+async function getSchoolWidePromotionPlan(selectedYear = null) {
+  const settings = await getSettings();
+  const currentAcademicYear = (selectedYear && selectedYear.trim()) || settings.academic_year || '2026-27';
+  const newAcademicYear = getSuggestedNextAcademicYear(currentAcademicYear);
 
-  if (!sourceClass || !targetClass) {
-    throw new Error('Source or target class not found');
-  }
+  // Fetch all classes
+  const [classes] = await db.query('SELECT * FROM classes ORDER BY name, section');
+  
+  // Sort classes in ladder progression order (Nursery, LKG, UKG, Class 1, Class 2 ... Class 12)
+  classes.sort((a, b) => {
+    const gradeA = parseGradeLevel(a.name);
+    const gradeB = parseGradeLevel(b.name);
+    if (gradeA !== gradeB) return gradeA - gradeB;
+    return (a.section || '').localeCompare(b.section || '');
+  });
 
-  const promoYear = (targetAcademicYear && targetAcademicYear.trim()) || targetClass.academic_year || '2027-28';
+  const ladder = [];
+  let totalSchoolStudents = 0;
+  let totalEligiblePassed = 0;
+  let totalFailed = 0;
+  let totalFeesDue = 0;
 
-  // Get source performance data
-  const promoStudentsData = await getPromotionStudentsData(sourceClassId);
-  const promoDataMap = {};
-  promoStudentsData.forEach(st => { promoDataMap[st.id] = st; });
+  for (const c of classes) {
+    const gradeNum = parseGradeLevel(c.name);
+    const nextInfo = getNextGradeInfo(gradeNum);
+    const students = await getPromotionStudentsData(c.id);
 
-  let promotedCount = 0;
+    const isGraduating = nextInfo.isGraduating || gradeNum >= 12;
+    const isTargetHigh = (nextInfo.nextGradeNumber === 9 || nextInfo.nextGradeNumber === 10);
+    const isTargetSenior = (nextInfo.nextGradeNumber === 11 || nextInfo.nextGradeNumber === 12);
 
-  for (const promoItem of studentPromotions) {
-    const sId = promoItem.studentId;
-    const stData = promoDataMap[sId];
-    if (!stData) continue;
+    let classPassed = 0;
+    let classFailed = 0;
+    let classPendingFees = 0;
 
-    const newRoll = (promoItem.newRollNumber && parseInt(promoItem.newRollNumber, 10)) ? parseInt(promoItem.newRollNumber, 10) : null;
-    const newOpt = promoItem.optionalSubject !== undefined ? promoItem.optionalSubject : stData.optional_subject;
-    const carriedFee = carryForwardFees ? Math.max(0, parseFloat(stData.pendingFee) || 0) : 0.00;
+    const studentList = students.map((s, idx) => {
+      totalSchoolStudents++;
+      classPendingFees += (s.pendingFee || 0);
 
-    // 1. Snapshot old class into historical archive table
-    await connection.query(`
-      INSERT INTO student_academic_history (
-        student_id, class_id, class_name, section, academic_year,
-        roll_number, optional_subject, total_marks_obtained, total_max_marks,
-        final_percentage, final_result_status, fee_balance_carried,
-        promoted_to_class_id, promoted_to_academic_year, promoted_at,
-        promoted_by, remarks
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?)
-    `, [
-      sId,
-      sourceClass.id,
-      sourceClass.name,
-      sourceClass.section,
-      sourceClass.academic_year || '2026-27',
-      stData.roll_number,
-      stData.optional_subject,
-      stData.totalObtained || null,
-      stData.totalMax || null,
-      stData.percentage,
-      stData.isPass ? 'Promoted' : 'Promoted (Conditional)',
-      carriedFee,
-      targetClass.id,
-      promoYear,
-      adminUserId,
-      (promotionRemarks && promotionRemarks.trim()) || `Promoted from ${sourceClass.name} - ${sourceClass.section} to ${targetClass.name} - ${targetClass.section} (${promoYear})`
-    ]);
+      if (s.isPass) {
+        classPassed++;
+        totalEligiblePassed++;
+      } else if (s.hasExams) {
+        classFailed++;
+        totalFailed++;
+      } else {
+        classPassed++;
+        totalEligiblePassed++;
+      }
 
-    // 2. Update students table to new class and new optional subject
-    let updateQuery = `
-      UPDATE students
-      SET class_id = ?,
-          roll_number = ?,
-          optional_subject = ?
-    `;
-    const updateParams = [targetClass.id, newRoll, newOpt || null];
+      // Default decision:
+      // - Class 12: 'graduate' (Pass Out as Alumni)
+      // - Passing students: 'promote' (Jump to next class)
+      // - Failed students: 'repeat' (Retain in same class for new session)
+      let defaultDecision = 'promote';
+      if (isGraduating) {
+        defaultDecision = 'graduate';
+      } else if (!s.isPass && s.hasExams) {
+        defaultDecision = 'repeat';
+      }
 
-    if (carryForwardFees) {
-      updateQuery += `, previous_balance = ?, previous_balance_remarks = ?`;
-      updateParams.push(
-        carriedFee,
-        carriedFee > 0 ? `Carried forward from ${sourceClass.name} - ${sourceClass.section} (${sourceClass.academic_year || ''})` : null
-      );
-    }
+      // Default UP Board Optional Subjects
+      let defaultOptSubject = s.optional_subject;
+      if (isTargetHigh && !defaultOptSubject) {
+        defaultOptSubject = 'Drawing';
+      } else if (isTargetSenior && !defaultOptSubject) {
+        defaultOptSubject = 'Mathematics';
+      }
 
-    updateQuery += ` WHERE id = ?`;
-    updateParams.push(sId);
+      return {
+        ...s,
+        defaultDecision,
+        suggestedRollNumber: idx + 1,
+        defaultOptSubject
+      };
+    });
 
-    await connection.query(updateQuery, updateParams);
-    promotedCount++;
+    totalFeesDue += classPendingFees;
+
+    ladder.push({
+      sourceClass: c,
+      gradeNum,
+      nextInfo,
+      isGraduating,
+      isTargetHigh,
+      isTargetSenior,
+      targetGradeName: nextInfo.nextGradeName,
+      targetSection: c.section || 'A',
+      students: studentList,
+      classPassed,
+      classFailed,
+      classPendingFees
+    });
   }
 
   return {
-    promotedCount,
-    sourceClass,
-    targetClass,
-    promoYear
+    currentAcademicYear,
+    newAcademicYear,
+    ladder,
+    stats: {
+      totalClasses: classes.length,
+      totalSchoolStudents,
+      totalEligiblePassed,
+      totalFailed,
+      totalFeesDue
+    }
+  };
+}
+
+/**
+ * Safely copies subjects and fee structure from an old class to a new academic year class
+ */
+async function copySubjectsAndFeesToNewClass(connection, oldClassId, newClassId, newAcademicYear) {
+  if (!oldClassId || !newClassId || oldClassId === newClassId) return;
+
+  // 1. Copy subjects if target has none
+  const [[{ subCount }]] = await connection.query('SELECT COUNT(*) as subCount FROM subjects WHERE class_id = ?', [newClassId]);
+  if (subCount === 0) {
+    const [oldSubjects] = await connection.query('SELECT * FROM subjects WHERE class_id = ?', [oldClassId]);
+    for (const sub of oldSubjects) {
+      await connection.query(
+        'INSERT INTO subjects (name, code, class_id, teacher_id, max_marks) VALUES (?, ?, ?, ?, ?)',
+        [sub.name, sub.code, newClassId, sub.teacher_id, sub.max_marks || 100]
+      );
+    }
+  }
+
+  // 2. Copy fee structures if target has none
+  const [[{ feeCount }]] = await connection.query('SELECT COUNT(*) as feeCount FROM fee_structure WHERE class_id = ?', [newClassId]);
+  if (feeCount === 0) {
+    const [oldFees] = await connection.query('SELECT * FROM fee_structure WHERE class_id = ?', [oldClassId]);
+    for (const fs of oldFees) {
+      await connection.query(
+        'INSERT INTO fee_structure (class_id, fee_type, amount, due_date, academic_year) VALUES (?, ?, ?, ?, ?)',
+        [newClassId, fs.fee_type, fs.amount, fs.due_date, newAcademicYear]
+      );
+    }
+  }
+}
+
+/**
+ * Finds or auto-creates a class in the database for the given academic year
+ */
+async function getOrCreateClass(connection, name, section, academicYear) {
+  const [existing] = await connection.query(
+    'SELECT * FROM classes WHERE name = ? AND section = ? AND academic_year = ? LIMIT 1',
+    [name, section, academicYear]
+  );
+  if (existing.length > 0) {
+    return existing[0];
+  }
+
+  // Find any previous class of same name to copy teacher
+  const [prev] = await connection.query(
+    'SELECT teacher_id FROM classes WHERE name = ? AND section = ? ORDER BY id DESC LIMIT 1',
+    [name, section]
+  );
+  const teacherId = prev.length ? prev[0].teacher_id : null;
+
+  const [res] = await connection.query(
+    'INSERT INTO classes (name, section, teacher_id, academic_year) VALUES (?, ?, ?, ?)',
+    [name, section, teacherId, academicYear]
+  );
+
+  return {
+    id: res.insertId,
+    name,
+    section,
+    teacher_id: teacherId,
+    academic_year: academicYear
+  };
+}
+
+/**
+ * Executes a School-Wide Academic Year Transition:
+ * - Runs in top-down order (Class 12 down to Class 1) so no student records are mixed up
+ * - Archives completed session marks and fee dues in `student_academic_history`
+ * - Class 12 is archived under previous academic year (e.g. 2026-27) as passed out alumni
+ * - Class 11 -> Class 12, Class 10 -> Class 11, ..., Class 1 -> Class 2
+ * - Class 1 in the new session becomes EMPTY ready for fresh admissions
+ * - Repeaters stay in the same grade for the new session
+ * - Updates global system setting `academic_year`
+ */
+async function executeSchoolWideAcademicTransition({
+  connection,
+  currentAcademicYear,
+  newAcademicYear,
+  carryForwardFees = true,
+  studentDecisions = {}, // { [studentId]: { decision: 'promote'|'repeat'|'graduate'|'left', newRollNumber, optionalSubject } }
+  adminUserId = null,
+  transitionRemarks = null
+}) {
+  const curYear = (currentAcademicYear && currentAcademicYear.trim()) || '2026-27';
+  const nextYear = (newAcademicYear && newAcademicYear.trim()) || getSuggestedNextAcademicYear(curYear);
+
+  // 1. Fetch all classes
+  const [classes] = await connection.query('SELECT * FROM classes ORDER BY name, section');
+  if (!classes.length) {
+    throw new Error('No classes found in the system to promote');
+  }
+
+  // 2. Sort classes in DESCENDING TOP-DOWN order (Class 12 down to Class 1)
+  classes.sort((a, b) => {
+    const gradeA = parseGradeLevel(a.name);
+    const gradeB = parseGradeLevel(b.name);
+    if (gradeA !== gradeB) return gradeB - gradeA; // Top-Down order!
+    return (b.section || '').localeCompare(a.section || '');
+  });
+
+  let totalPromoted = 0;
+  let totalRepeated = 0;
+  let totalGraduated = 0;
+  let totalLeft = 0;
+
+  for (const sourceClass of classes) {
+    const gradeNum = parseGradeLevel(sourceClass.name);
+    const nextInfo = getNextGradeInfo(gradeNum);
+    const isGraduatingClass = nextInfo.isGraduating || gradeNum >= 12;
+
+    // Load students for this class directly on this transaction connection
+    const [studentsData] = await connection.query(`
+      SELECT s.*, u.name, u.phone, u.profile_photo, u.email
+      FROM students s
+      JOIN users u ON s.user_id = u.id
+      WHERE s.class_id = ?
+      ORDER BY (s.roll_number IS NULL OR s.roll_number = 0), s.roll_number ASC, u.name ASC
+    `, [sourceClass.id]);
+    if (!studentsData.length) continue;
+
+    // Load marks summary for this class directly on connection
+    const [marksRows] = await connection.query(`
+      SELECT r.student_id, SUM(r.marks_obtained) as total_obt, SUM(r.max_marks) as total_max
+      FROM results r
+      JOIN exams e ON r.exam_id = e.id
+      WHERE e.class_id = ?
+      GROUP BY r.student_id
+    `, [sourceClass.id]);
+    const marksMap = {};
+    marksRows.forEach(r => { marksMap[r.student_id] = r; });
+
+    // Determine target classes for the new session:
+    // a) Target class if promoted (e.g. Class 1 -> Class 2 of nextYear)
+    let promotedTargetClass = null;
+    if (!isGraduatingClass) {
+      promotedTargetClass = await getOrCreateClass(connection, nextInfo.nextGradeName, sourceClass.section || 'A', nextYear);
+      await copySubjectsAndFeesToNewClass(connection, sourceClass.id, promotedTargetClass.id, nextYear);
+    }
+
+    // b) Target class if repeated (same grade in nextYear, e.g. Class 2 -> Class 2 of nextYear)
+    let repeatedTargetClass = await getOrCreateClass(connection, sourceClass.name, sourceClass.section || 'A', nextYear);
+    await copySubjectsAndFeesToNewClass(connection, sourceClass.id, repeatedTargetClass.id, nextYear);
+
+    // c) For graduating Class 12 students:
+    // Keep them linked to sourceClass (which has curYear e.g. 2026-27), or mark an archive class
+    let graduateArchiveClass = sourceClass;
+    if (isGraduatingClass) {
+      // Ensure sourceClass has curYear explicitly set
+      await connection.query('UPDATE classes SET academic_year = ? WHERE id = ?', [curYear, sourceClass.id]);
+    }
+
+    // Process every student in this class
+    for (const st of studentsData) {
+      const decisionObj = studentDecisions[st.id] || {};
+      let decision = decisionObj.decision;
+      if (!decision) {
+        decision = isGraduatingClass ? 'graduate' : 'promote';
+      }
+
+      const mRow = marksMap[st.id] || {};
+      const totalObt = mRow.total_obt ? parseFloat(mRow.total_obt) : null;
+      const totalMax = mRow.total_max ? parseFloat(mRow.total_max) : null;
+      const pct = (totalMax && totalMax > 0) ? Math.round((totalObt / totalMax) * 1000) / 10 : null;
+
+      const newRoll = (decisionObj.newRollNumber && parseInt(decisionObj.newRollNumber, 10))
+        ? parseInt(decisionObj.newRollNumber, 10)
+        : null;
+      const newOpt = decisionObj.optionalSubject !== undefined ? decisionObj.optionalSubject : st.optional_subject;
+      const carriedFee = carryForwardFees ? Math.max(0, parseFloat(st.previous_balance) || 0) : 0.00;
+
+      // Result status string for historical archive
+      let resultStatus = 'Promoted';
+      if (decision === 'graduate') resultStatus = 'Graduated / Passed Out';
+      else if (decision === 'repeat') resultStatus = 'Retained / Repeating';
+      else if (decision === 'left') resultStatus = 'Left School / TC Issued';
+      else if (!st.isPass) resultStatus = 'Promoted (Parent Request / Conditional)';
+
+      let targetClassId = null;
+      let targetYearForHistory = nextYear;
+
+      if (decision === 'graduate') {
+        targetClassId = graduateArchiveClass.id;
+        targetYearForHistory = 'Passed Out';
+      } else if (decision === 'repeat') {
+        targetClassId = repeatedTargetClass.id;
+        targetYearForHistory = nextYear;
+      } else if (decision === 'left') {
+        targetClassId = null;
+        targetYearForHistory = 'Left School';
+      } else {
+        targetClassId = promotedTargetClass ? promotedTargetClass.id : null;
+        targetYearForHistory = nextYear;
+      }
+
+      // 1. Snapshot old session into student_academic_history
+      await connection.query(`
+        INSERT INTO student_academic_history (
+          student_id, class_id, class_name, section, academic_year,
+          roll_number, optional_subject, total_marks_obtained, total_max_marks,
+          final_percentage, final_result_status, fee_balance_carried,
+          promoted_to_class_id, promoted_to_academic_year, promoted_at,
+          promoted_by, remarks
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?)
+      `, [
+        st.id,
+        sourceClass.id,
+        sourceClass.name,
+        sourceClass.section || 'A',
+        sourceClass.academic_year || curYear,
+        st.roll_number,
+        st.optional_subject,
+        totalObt,
+        totalMax,
+        pct,
+        resultStatus,
+        carriedFee,
+        targetClassId,
+        targetYearForHistory,
+        adminUserId,
+        (transitionRemarks && transitionRemarks.trim()) || `Academic Year Transition: ${curYear} -> ${nextYear}`
+      ]);
+
+      // 2. Update students table
+      let updateSql = `
+        UPDATE students
+        SET class_id = ?,
+            roll_number = ?,
+            optional_subject = ?
+      `;
+      const updateParams = [targetClassId, newRoll, newOpt || null];
+
+      if (carryForwardFees) {
+        updateSql += `, previous_balance = ?, previous_balance_remarks = ?`;
+        updateParams.push(
+          carriedFee,
+          carriedFee > 0 ? `Carried forward from ${sourceClass.name} - ${sourceClass.section} (${curYear})` : null
+        );
+      }
+
+      updateSql += ` WHERE id = ?`;
+      updateParams.push(st.id);
+      await connection.query(updateSql, updateParams);
+
+      if (decision === 'graduate') totalGraduated++;
+      else if (decision === 'repeat') totalRepeated++;
+      else if (decision === 'left') totalLeft++;
+      else totalPromoted++;
+    }
+  }
+
+  // 3. Ensure lowest class (e.g. Class 1 Section A) exists for newAcademicYear
+  // Since all Class 1 students jumped to Class 2, Class 1 is now EMPTY ready for fresh admissions!
+  const firstClass = await getOrCreateClass(connection, 'Class 1', 'A', nextYear);
+  // Find any old Class 1 to copy subjects/fees
+  const [oldClass1] = await connection.query("SELECT id FROM classes WHERE name = 'Class 1' AND academic_year != ? ORDER BY id DESC LIMIT 1", [nextYear]);
+  if (oldClass1.length) {
+    await copySubjectsAndFeesToNewClass(connection, oldClass1[0].id, firstClass.id, nextYear);
+  }
+
+  // 4. Update system setting for active academic year in transaction
+  await connection.query("INSERT INTO settings (key_name, key_value) VALUES ('academic_year', ?) ON DUPLICATE KEY UPDATE key_value = ?", [nextYear, nextYear]);
+
+  return {
+    currentAcademicYear: curYear,
+    newAcademicYear: nextYear,
+    totalPromoted,
+    totalRepeated,
+    totalGraduated,
+    totalLeft,
+    totalProcessed: totalPromoted + totalRepeated + totalGraduated + totalLeft
   };
 }
 
@@ -368,7 +713,11 @@ async function getStudentFullAcademicHistory(studentId) {
 }
 
 module.exports = {
+  parseGradeLevel,
+  getNextGradeInfo,
+  getSuggestedNextAcademicYear,
   getPromotionStudentsData,
-  executeBatchPromotion,
+  getSchoolWidePromotionPlan,
+  executeSchoolWideAcademicTransition,
   getStudentFullAcademicHistory
 };
