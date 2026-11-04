@@ -554,6 +554,22 @@ async function ensureSchema() {
       console.warn('Settings initialization notice:', sErr.message);
     }
 
+    // 10. Auto-purge all demo records on cloud/local environments for clean school handover
+    try {
+      const [[dCountRow]] = await pool.query(
+        "SELECT COUNT(*) as count FROM users WHERE is_demo = 1 OR email LIKE '%.demo@school.erp' OR email LIKE '%@school.erp'"
+      );
+      if (dCountRow && dCountRow.count > 0) {
+        await pool.query(
+          "DELETE FROM users WHERE is_demo = 1 OR email LIKE '%.demo@school.erp' OR email LIKE '%@school.erp'"
+        );
+        await pool.query("DELETE FROM system_settings WHERE setting_key = 'demo_initialized'");
+        console.log(`🧹 Auto-purged ${dCountRow.count} demo users & associated records from database.`);
+      }
+    } catch (purgeErr) {
+      console.log('Demo purge check notice:', purgeErr.message);
+    }
+
     console.log('✅ All database schema checks and seeding completed.');
   } catch (err) {
     console.error('ensureSchema error:', err.message);
