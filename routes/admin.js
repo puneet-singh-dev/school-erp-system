@@ -13,7 +13,8 @@ const { generateClassMarksPDF } = require('../utils/marksheetPdf');
 const { generateClassFeeRemindersHindiPDF } = require('../utils/feeReminderHindiPdf');
 const { generateClassStudentListPDF } = require('../utils/classListPdf');
 const { generateStudentListPDF } = require('../utils/studentListPdf');
-const { ensureDemoColumn, getNextSequentialAdmissionNo, generateDemoData, clearDemoData } = require('../utils/demoData');
+const { getNextSequentialAdmissionNo } = require('../utils/demoData');
+const { logActivity } = require('../utils/activityLogger');
 const { generateReportCardPDF } = require('../utils/reportCardPdf');
 const { calculateClassRanks } = require('../utils/examRankHelper');
 const { getPendingFeeReport } = require('../utils/feeReport');
@@ -187,56 +188,18 @@ router.get('/', async (req, res) => {
       notices = nList || [];
     } catch (e) { console.error('Dashboard notices error:', e.message); }
 
-    // 10. Demo records count
-    let demoCount = 0;
-    try {
-      await ensureDemoColumn();
-      const [[dRow]] = await db.query('SELECT COUNT(*) as demoCount FROM users WHERE is_demo = 1');
-      demoCount = dRow ? dRow.demoCount : 0;
-    } catch (e) { console.error('Dashboard demo count error:', e.message); }
-
     res.render('admin/dashboard', {
       title: 'Admin Dashboard',
       totalStudents, totalTeachers, totalClasses, feesCollected, totalAllFees,
-      attendanceData, feeMonthly, recentStudents, notices, demoCount
+      attendanceData, feeMonthly, recentStudents, notices
     });
   } catch (err) {
     console.error('Dashboard fatal error:', err.message);
     res.render('admin/dashboard', {
       title: 'Admin Dashboard',
       totalStudents: 0, totalTeachers: 0, totalClasses: 0, feesCollected: 0, totalAllFees: 0,
-      attendanceData: [], feeMonthly: [], recentStudents: [], notices: [], demoCount: 0
+      attendanceData: [], feeMonthly: [], recentStudents: [], notices: []
     });
-  }
-});
-
-// ==================== DEMO DATA MANAGEMENT ====================
-router.post('/demo/generate', async (req, res) => {
-  try {
-    const adminId = (req.session && req.session.user) ? req.session.user.id : 1;
-    const result = await generateDemoData(adminId);
-    if (result.alreadyExists) {
-      req.flash('info_msg', `Demo data is already active (${result.count} records).`);
-    } else {
-      req.flash('success_msg', `Demo data successfully generated: ${result.students} students and ${result.teachers} teachers across classes!`);
-    }
-    res.redirect('/admin');
-  } catch (err) {
-    console.error('Error generating demo data:', err);
-    req.flash('error_msg', 'Error generating demo data: ' + err.message);
-    res.redirect('/admin');
-  }
-});
-
-router.post('/demo/clear', async (req, res) => {
-  try {
-    const deletedCount = await clearDemoData();
-    req.flash('success_msg', `Demo data deleted successfully (${deletedCount} records removed). Demo mode exited.`);
-    res.redirect('/admin');
-  } catch (err) {
-    console.error('Error clearing demo data:', err);
-    req.flash('error_msg', 'Error clearing demo data: ' + err.message);
-    res.redirect('/admin');
   }
 });
 
@@ -413,6 +376,17 @@ router.post('/students/add', upload.single('profile_photo'), async (req, res) =>
       ]
     );
 
+    await logActivity({
+      actionType: 'CREATE',
+      entityType: 'student',
+      entityId: userResult.insertId,
+      entityName: name,
+      description: `New student enrolled: ${name} (Adm No: ${admission_no}, Roll No: ${roll_number || 'N/A'})`,
+      userId: req.session.user ? req.session.user.id : null,
+      userName: req.session.user ? req.session.user.name : 'Admin',
+      ip: req.ip
+    });
+
     req.flash('success_msg', `Student added! Admission No: ${admission_no}, Roll No: ${roll_number || 'N/A'}`);
     res.redirect('/admin/students');
   } catch (err) {
@@ -498,11 +472,37 @@ router.post('/students/edit/:id', upload.single('profile_photo'), async (req, re
 
 router.post('/students/delete/:id', async (req, res) => {
   try {
-    const [students] = await db.query('SELECT user_id FROM students WHERE id=?', [req.params.id]);
-    if (students.length) await db.query('DELETE FROM users WHERE id=?', [students[0].user_id]);
-    req.flash('success_msg', 'Student deleted');
+    const [[student]] = await db.query(`
+      SELECT s.*, u.name, u.email, u.password, u.phone as user_phone, u.address as user_address,
+             u.profile_photo, u.photo_data, u.photo_mime, u.created_at as user_created_at,
+             c.name as class_name, c.section as class_section
+      FROM students s
+      JOIN users u ON s.user_id = u.id
+      LEFT JOIN classes c ON s.class_id = c.id
+      WHERE s.id = ?
+    `, [req.params.id]);
+
+    if (student) {
+      await logActivity({
+        actionType: 'DELETE',
+        entityType: 'student',
+        entityId: student.id,
+        entityName: student.name,
+        description: `Deleted student: ${student.name} (${student.admission_no || 'No Adm No'}) from ${student.class_name || 'Class ' + (student.class_id || '')}`,
+        oldData: student,
+        userId: req.session.user ? req.session.user.id : null,
+        userName: req.session.user ? req.session.user.name : 'Admin',
+        ip: req.ip
+      });
+      await db.query('DELETE FROM users WHERE id=?', [student.user_id]);
+    }
+    req.flash('success_msg', 'Student deleted. You can restore them anytime from Recent Activity.');
     res.redirect('/admin/students');
-  } catch (err) { console.error(err); req.flash('error_msg', 'Error deleting student'); res.redirect('/admin/students'); }
+  } catch (err) {
+    console.error('Error deleting student:', err);
+    req.flash('error_msg', 'Error deleting student: ' + err.message);
+    res.redirect('/admin/students');
+  }
 });
 
 // ==================== ACADEMIC YEAR TRANSITION & SCHOOL-WIDE PROMOTION ====================
@@ -627,6 +627,18 @@ router.post('/teachers/add', async (req, res) => {
       [name, email, hashed, 'teacher', phone, address]);
     await db.query('INSERT INTO teachers (user_id,employee_id,department,designation,date_of_joining,qualification,salary) VALUES (?,?,?,?,?,?,?)',
       [userResult.insertId, employee_id, department, designation, date_of_joining || null, qualification, salary || 0]);
+
+    await logActivity({
+      actionType: 'CREATE',
+      entityType: 'teacher',
+      entityId: userResult.insertId,
+      entityName: name,
+      description: `New teacher added: ${name} (ID: ${employee_id}, Dept: ${department || 'General'})`,
+      userId: req.session.user ? req.session.user.id : null,
+      userName: req.session.user ? req.session.user.name : 'Admin',
+      ip: req.ip
+    });
+
     req.flash('success_msg', `Teacher added! Employee ID: ${employee_id}. Login password: ${phone ? 'Teacher\'s mobile number' : 'teacher123'}`);
     res.redirect('/admin/teachers');
   } catch (err) { console.error(err); req.flash('error_msg', 'Error: ' + err.message); res.redirect('/admin/teachers/add'); }
@@ -651,11 +663,34 @@ router.post('/teachers/edit/:id', async (req, res) => {
 
 router.post('/teachers/delete/:id', async (req, res) => {
   try {
-    const [teachers] = await db.query('SELECT user_id FROM teachers WHERE id=?', [req.params.id]);
-    if (teachers.length) await db.query('DELETE FROM users WHERE id=?', [teachers[0].user_id]);
-    req.flash('success_msg', 'Teacher deleted');
+    const [[teacher]] = await db.query(`
+      SELECT t.*, u.name, u.email, u.password, u.phone as user_phone, u.address as user_address, u.created_at as user_created_at
+      FROM teachers t
+      JOIN users u ON t.user_id = u.id
+      WHERE t.id = ?
+    `, [req.params.id]);
+
+    if (teacher) {
+      await logActivity({
+        actionType: 'DELETE',
+        entityType: 'teacher',
+        entityId: teacher.id,
+        entityName: teacher.name,
+        description: `Deleted teacher: ${teacher.name} (${teacher.employee_id || 'ID #' + teacher.id}), Department: ${teacher.department || 'General'}`,
+        oldData: teacher,
+        userId: req.session.user ? req.session.user.id : null,
+        userName: req.session.user ? req.session.user.name : 'Admin',
+        ip: req.ip
+      });
+      await db.query('DELETE FROM users WHERE id=?', [teacher.user_id]);
+    }
+    req.flash('success_msg', 'Teacher deleted. You can restore them anytime from Recent Activity.');
     res.redirect('/admin/teachers');
-  } catch (err) { console.error(err); req.flash('error_msg', 'Error'); res.redirect('/admin/teachers'); }
+  } catch (err) {
+    console.error('Error deleting teacher:', err);
+    req.flash('error_msg', 'Error deleting teacher: ' + err.message);
+    res.redirect('/admin/teachers');
+  }
 });
 
 // ==================== CLASSES ====================
@@ -1292,6 +1327,21 @@ router.post('/fees/collect', async (req, res) => {
         [prevBalancePaid, student_id]
       );
     }
+
+    // Log fee payment activity
+    try {
+      const [[stRow]] = await db.query('SELECT u.name FROM students s JOIN users u ON s.user_id=u.id WHERE s.id=?', [student_id]);
+      await logActivity({
+        actionType: 'FEE_COLLECTED',
+        entityType: 'fee_payment',
+        entityId: result.insertId,
+        entityName: stRow ? stRow.name : `Student #${student_id}`,
+        description: `Fee collected: ₹${Number(totalPaid).toLocaleString('en-IN')} (Receipt: ${receiptNo}) via ${payment_mode || 'Cash'}`,
+        userId: req.session.user ? req.session.user.id : null,
+        userName: req.session.user ? req.session.user.name : 'Admin',
+        ip: req.ip
+      });
+    } catch (e) {}
 
     req.flash('success_msg', `Fee collected successfully! Receipt No: ${receiptNo}`);
     res.redirect(`/admin/fees/collect?class_id=${class_id}&student_id=${student_id}&new_receipt_id=${result.insertId}`);
@@ -2057,13 +2107,41 @@ router.get('/notices', async (req, res) => {
 
 router.post('/notices/add', async (req, res) => {
   const { title, content, target_role } = req.body;
-  await db.query('INSERT INTO notices (title,content,target_role,created_by) VALUES (?,?,?,?)', [title, content, target_role, req.session.user.id]);
+  const [nResult] = await db.query('INSERT INTO notices (title,content,target_role,created_by) VALUES (?,?,?,?)', [title, content, target_role, req.session.user.id]);
+  await logActivity({
+    actionType: 'CREATE',
+    entityType: 'notice',
+    entityId: nResult.insertId,
+    entityName: title,
+    description: `Published notice: "${title}" (Audience: ${target_role || 'All'})`,
+    userId: req.session.user ? req.session.user.id : null,
+    userName: req.session.user ? req.session.user.name : 'Admin',
+    ip: req.ip
+  });
   req.flash('success_msg', 'Notice published');
   res.redirect('/admin/notices');
 });
 
 router.post('/notices/delete/:id', async (req, res) => {
-  await db.query('DELETE FROM notices WHERE id=?', [req.params.id]);
+  try {
+    const [[notice]] = await db.query('SELECT * FROM notices WHERE id=?', [req.params.id]);
+    if (notice) {
+      await logActivity({
+        actionType: 'DELETE',
+        entityType: 'notice',
+        entityId: notice.id,
+        entityName: notice.title,
+        description: `Deleted notice: "${notice.title}"`,
+        oldData: notice,
+        userId: req.session.user ? req.session.user.id : null,
+        userName: req.session.user ? req.session.user.name : 'Admin',
+        ip: req.ip
+      });
+      await db.query('DELETE FROM notices WHERE id=?', [req.params.id]);
+    }
+  } catch (e) {
+    console.error('Error deleting notice:', e);
+  }
   req.flash('success_msg', 'Notice deleted');
   res.redirect('/admin/notices');
 });
@@ -2437,6 +2515,245 @@ router.post('/settings/save', async (req, res) => {
     console.error('Error saving settings:', err);
     req.flash('error_msg', 'Error saving settings: ' + err.message);
     res.redirect('/admin/settings');
+  }
+});
+
+// ==================== RECENT ACTIVITY & AUDIT LOG ====================
+router.get('/activity', async (req, res) => {
+  try {
+    const days = parseInt(req.query.days, 10) || 7;
+    const filterType = (req.query.type || '').trim();
+    const filterEntity = (req.query.entity || '').trim();
+
+    let whereSql = 'WHERE a.created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)';
+    const params = [days];
+
+    if (filterType) {
+      whereSql += ' AND a.action_type = ?';
+      params.push(filterType);
+    }
+    if (filterEntity) {
+      whereSql += ' AND a.entity_type = ?';
+      params.push(filterEntity);
+    }
+
+    const [activities] = await db.query(`
+      SELECT a.* 
+      FROM activity_log a
+      ${whereSql}
+      ORDER BY a.created_at DESC
+      LIMIT 250
+    `, params);
+
+    const logs = (activities || []).map(item => {
+      let oldData = null;
+      let newData = null;
+      try {
+        if (item.old_data) {
+          oldData = typeof item.old_data === 'string' ? JSON.parse(item.old_data) : item.old_data;
+        }
+      } catch (e) {}
+      try {
+        if (item.new_data) {
+          newData = typeof item.new_data === 'string' ? JSON.parse(item.new_data) : item.new_data;
+        }
+      } catch (e) {}
+
+      return {
+        ...item,
+        old_data: oldData,
+        new_data: newData
+      };
+    });
+
+    res.render('admin/activity-log', {
+      title: 'Recent Activity & Audit Log',
+      logs,
+      days,
+      filterType,
+      filterEntity
+    });
+  } catch (err) {
+    console.error('Error loading activity log:', err);
+    req.flash('error_msg', 'Error loading recent activity: ' + err.message);
+    res.redirect('/admin');
+  }
+});
+
+// Restore deleted entity from activity log
+router.post('/activity/restore/:logId', async (req, res) => {
+  try {
+    const { logId } = req.params;
+    const [[logEntry]] = await db.query('SELECT * FROM activity_log WHERE id = ?', [logId]);
+
+    if (!logEntry || logEntry.action_type !== 'DELETE') {
+      req.flash('error_msg', 'Cannot restore: Record is not a deletion entry.');
+      return res.redirect('/admin/activity');
+    }
+
+    let oldData = null;
+    try {
+      oldData = typeof logEntry.old_data === 'string' ? JSON.parse(logEntry.old_data) : logEntry.old_data;
+    } catch (e) {}
+
+    if (!oldData) {
+      req.flash('error_msg', 'Cannot restore: No snapshot data was saved with this record.');
+      return res.redirect('/admin/activity');
+    }
+
+    const entityType = logEntry.entity_type;
+    const adminUser = req.session && req.session.user ? req.session.user : { id: null, name: 'Admin' };
+
+    if (entityType === 'student') {
+      // Check if student with this email or admission_no already exists
+      const [[userExists]] = await db.query('SELECT id FROM users WHERE id = ? OR email = ?', [oldData.user_id, oldData.email]);
+      if (userExists) {
+        req.flash('error_msg', `Cannot restore: A user with ID #${oldData.user_id} or email "${oldData.email}" already exists.`);
+        return res.redirect('/admin/activity');
+      }
+
+      // Re-insert into users table
+      await db.query(
+        `INSERT INTO users (id, name, email, password, role, phone, address, profile_photo, photo_data, photo_mime, created_at)
+         VALUES (?, ?, ?, ?, 'student', ?, ?, ?, ?, ?, ?)`,
+        [
+          oldData.user_id,
+          oldData.name,
+          oldData.email,
+          oldData.password,
+          oldData.user_phone || oldData.phone || null,
+          oldData.user_address || oldData.address || null,
+          oldData.profile_photo || null,
+          oldData.photo_data || null,
+          oldData.photo_mime || null,
+          oldData.user_created_at || new Date()
+        ]
+      );
+
+      // Re-insert into students table
+      await db.query(
+        `INSERT INTO students 
+         (id, user_id, admission_no, roll_number, class_id, date_of_birth, gender,
+          father_name, mother_name, guardian_name, guardian_phone, emergency_contact,
+          blood_group, category, aadhaar_no, admission_date, previous_balance, previous_balance_remarks,
+          uses_transport, transport_route, transport_fee, optional_subject)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          oldData.id,
+          oldData.user_id,
+          oldData.admission_no,
+          oldData.roll_number || null,
+          oldData.class_id || null,
+          oldData.date_of_birth || oldData.dob || null,
+          oldData.gender || null,
+          oldData.father_name || null,
+          oldData.mother_name || null,
+          oldData.guardian_name || null,
+          oldData.guardian_phone || null,
+          oldData.emergency_contact || null,
+          oldData.blood_group || null,
+          oldData.category || null,
+          oldData.aadhaar_no || null,
+          oldData.admission_date || new Date().toISOString().split('T')[0],
+          oldData.previous_balance || 0.00,
+          oldData.previous_balance_remarks || null,
+          oldData.uses_transport ? 1 : 0,
+          oldData.transport_route || null,
+          oldData.transport_fee || 0.00,
+          oldData.optional_subject || null
+        ]
+      );
+
+      await logActivity({
+        actionType: 'CREATE',
+        entityType: 'student',
+        entityId: oldData.id,
+        entityName: oldData.name,
+        description: `Restored deleted student ${oldData.name} (${oldData.admission_no || ''}) from Activity Log`,
+        userId: adminUser.id,
+        userName: adminUser.name,
+        ip: req.ip
+      });
+
+      req.flash('success_msg', `Student "${oldData.name}" has been successfully restored with all data intact!`);
+
+    } else if (entityType === 'teacher') {
+      const [[userExists]] = await db.query('SELECT id FROM users WHERE id = ? OR email = ?', [oldData.user_id, oldData.email]);
+      if (userExists) {
+        req.flash('error_msg', `Cannot restore: User with ID #${oldData.user_id} or email "${oldData.email}" already exists.`);
+        return res.redirect('/admin/activity');
+      }
+
+      await db.query(
+        `INSERT INTO users (id, name, email, password, role, phone, address, created_at)
+         VALUES (?, ?, ?, ?, 'teacher', ?, ?, ?)`,
+        [
+          oldData.user_id,
+          oldData.name,
+          oldData.email,
+          oldData.password,
+          oldData.user_phone || oldData.phone || null,
+          oldData.user_address || oldData.address || null,
+          oldData.user_created_at || new Date()
+        ]
+      );
+
+      await db.query(
+        `INSERT INTO teachers 
+         (id, user_id, employee_id, department, designation, date_of_joining, qualification, salary)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          oldData.id,
+          oldData.user_id,
+          oldData.employee_id || null,
+          oldData.department || null,
+          oldData.designation || null,
+          oldData.date_of_joining || null,
+          oldData.qualification || null,
+          oldData.salary || 0.00
+        ]
+      );
+
+      await logActivity({
+        actionType: 'CREATE',
+        entityType: 'teacher',
+        entityId: oldData.id,
+        entityName: oldData.name,
+        description: `Restored deleted teacher ${oldData.name} (${oldData.employee_id || ''}) from Activity Log`,
+        userId: adminUser.id,
+        userName: adminUser.name,
+        ip: req.ip
+      });
+
+      req.flash('success_msg', `Teacher "${oldData.name}" has been successfully restored!`);
+
+    } else if (entityType === 'notice') {
+      await db.query(
+        'INSERT INTO notices (title, content, target_role, created_by, created_at) VALUES (?, ?, ?, ?, ?)',
+        [oldData.title, oldData.content, oldData.target_role, adminUser.id, oldData.created_at || new Date()]
+      );
+
+      await logActivity({
+        actionType: 'CREATE',
+        entityType: 'notice',
+        entityName: oldData.title,
+        description: `Restored notice: "${oldData.title}" from Activity Log`,
+        userId: adminUser.id,
+        userName: adminUser.name,
+        ip: req.ip
+      });
+
+      req.flash('success_msg', `Notice "${oldData.title}" has been successfully restored!`);
+
+    } else {
+      req.flash('error_msg', `Restore is not supported for entity type: ${entityType}`);
+    }
+
+    res.redirect('/admin/activity');
+  } catch (err) {
+    console.error('Error during record restore:', err);
+    req.flash('error_msg', 'Failed to restore record: ' + err.message);
+    res.redirect('/admin/activity');
   }
 });
 

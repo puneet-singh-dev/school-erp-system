@@ -1,51 +1,28 @@
-<% if (typeof demoCount !== 'undefined' && demoCount > 0) { %>
-<!-- Demo Mode Banner -->
-<div class="card border-warning bg-warning bg-opacity-10 shadow-sm mb-4">
-  <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-3 py-3">
-    <div class="d-flex align-items-center">
-      <div class="rounded-circle bg-warning text-dark p-2 me-3 d-flex align-items-center justify-content-center" style="width: 44px; height: 44px;">
-        <i class="fa-solid fa-flask-vial fs-5"></i>
-      </div>
-      <div>
-        <h6 class="fw-bold mb-1 text-dark">
-          Demo Testing Mode Active 
-          <span class="badge bg-warning text-dark ms-2"><%- demoCount %> Demo Records</span>
-        </h6>
-        <p class="text-secondary small mb-0">
-          Demo students (with transport/van fees and varied fee payment statuses) and demo teachers are active for testing. You can delete all demo data at any time.
-        </p>
-      </div>
-    </div>
-    <div class="d-flex align-items-center gap-2">
-      <a href="/admin/backup/download" class="btn btn-outline-dark btn-sm shadow-sm px-3 py-2 fw-semibold" title="Download complete database backup">
-        <i class="fa-solid fa-cloud-arrow-down me-1"></i>Database Backup
-      </a>
-      <form action="/admin/demo/clear" method="POST" onsubmit="return confirm('Are you sure you want to delete and exit all demo students and teachers? All real data will be preserved intact.');" class="m-0">
-        <button type="submit" class="btn btn-danger btn-sm shadow-sm px-3 py-2 fw-semibold">
-          <i class="fa-solid fa-trash-can me-1"></i>Delete / Exit Demo
-        </button>
-      </form>
-    </div>
+<!-- Admin Quick Action Bar -->
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+  <div class="d-flex gap-2 flex-wrap">
+    <a href="/admin/fees/collect" class="btn btn-primary btn-sm shadow-sm fw-semibold">
+      <i class="fa-solid fa-plus me-1"></i>Collect Fee
+    </a>
+    <a href="/admin/students/add" class="btn btn-outline-primary btn-sm shadow-sm fw-semibold">
+      <i class="fa-solid fa-user-plus me-1"></i>New Admission
+    </a>
+    <a href="/admin/attendance" class="btn btn-outline-success btn-sm shadow-sm fw-semibold">
+      <i class="fa-solid fa-clipboard-check me-1"></i>Mark Attendance
+    </a>
+    <a href="/admin/activity" class="btn btn-outline-dark btn-sm shadow-sm fw-semibold">
+      <i class="fa-solid fa-clock-rotate-left me-1"></i>Recent Activity
+    </a>
   </div>
-</div>
-<% } else { %>
-<!-- Quick Generator & Backup bar -->
-<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-  <div class="d-flex gap-2">
-    <a href="/admin/settings" class="btn btn-outline-primary btn-sm shadow-sm fw-semibold">
+  <div class="d-flex gap-2 flex-wrap">
+    <a href="/admin/settings" class="btn btn-outline-secondary btn-sm shadow-sm fw-semibold">
       <i class="fa-solid fa-gear me-1"></i>School Settings
     </a>
-    <a href="/admin/backup/download" class="btn btn-outline-success btn-sm shadow-sm fw-semibold">
+    <a href="/admin/backup/download" class="btn btn-outline-success btn-sm shadow-sm fw-semibold" title="Download SQL backup of database">
       <i class="fa-solid fa-database me-1"></i>Database Backup (.sql)
     </a>
   </div>
-  <form action="/admin/demo/generate" method="POST" class="m-0">
-    <button type="submit" class="btn btn-outline-primary btn-sm shadow-sm">
-      <i class="fa-solid fa-flask-vial me-1"></i>Load Demo Data (10-15 students/class & teachers)
-    </button>
-  </form>
 </div>
-<% } %>
 
 <!-- Stats Cards -->
 <div class="row g-4 mb-4">
@@ -171,81 +148,96 @@
 </div>
 
 <script>
-// Fee Chart
-const feeData = <%- JSON.stringify(feeMonthly) %>;
-new Chart(document.getElementById('feeChart'), {
-  type: 'bar',
-  data: {
-    labels: feeData.map(d => d.month),
-    datasets: [{
-      label: 'Fees Collected (₹)',
-      data: feeData.map(d => d.total),
-      backgroundColor: 'rgba(59,130,246,0.7)',
-      borderColor: '#2563eb',
-      borderWidth: 1.5,
-      borderRadius: 6
-    }]
-  },
-  options: {
-    responsive: true,
-    maintainAspectRatio: true,
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        callbacks: {
-          label: function(ctx) {
-            return ' ₹ ' + Number(ctx.raw || 0).toLocaleString('en-IN');
+document.addEventListener('DOMContentLoaded', function () {
+  if (typeof Chart === 'undefined') {
+    console.warn('Chart.js library is not loaded.');
+    return;
+  }
+
+  // Fee Chart
+  const feeData = <%- JSON.stringify(feeMonthly || []) %>;
+  const feeCanvas = document.getElementById('feeChart');
+  if (feeCanvas) {
+    new Chart(feeCanvas, {
+      type: 'bar',
+      data: {
+        labels: feeData.map(d => d.month),
+        datasets: [{
+          label: 'Fees Collected (₹)',
+          data: feeData.map(d => d.total),
+          backgroundColor: 'rgba(59,130,246,0.7)',
+          borderColor: '#2563eb',
+          borderWidth: 1.5,
+          borderRadius: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function(ctx) {
+                return ' ₹ ' + Number(ctx.raw || 0).toLocaleString('en-IN');
+              }
+            }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              callback: function(val) {
+                return '₹' + Number(val).toLocaleString('en-IN');
+              }
+            }
           }
         }
       }
-    },
-    scales: {
-      y: {
-        beginAtZero: true,
-        ticks: {
-          callback: function(val) {
-            return '₹' + Number(val).toLocaleString('en-IN');
+    });
+  }
+
+  // Attendance Chart
+  const attData = <%- JSON.stringify(attendanceData || []) %>;
+  const attMap = {};
+  let totalAtt = 0;
+  attData.forEach(a => {
+    attMap[a.status] = Number(a.count) || 0;
+    totalAtt += Number(a.count) || 0;
+  });
+
+  const attCanvasWrapper = document.getElementById('attCanvasWrapper');
+  const attEmptyState = document.getElementById('attEmptyState');
+
+  if (totalAtt === 0) {
+    if (attCanvasWrapper) attCanvasWrapper.classList.add('d-none');
+    if (attEmptyState) attEmptyState.classList.remove('d-none');
+  } else {
+    if (attCanvasWrapper) attCanvasWrapper.classList.remove('d-none');
+    if (attEmptyState) attEmptyState.classList.add('d-none');
+    const attCanvas = document.getElementById('attChart');
+    if (attCanvas) {
+      new Chart(attCanvas, {
+        type: 'doughnut',
+        data: {
+          labels: ['Present', 'Absent', 'Late', 'Leave'],
+          datasets: [{
+            data: [attMap['Present']||0, attMap['Absent']||0, attMap['Late']||0, attMap['Leave']||0],
+            backgroundColor: ['#22c55e','#ef4444','#f59e0b','#6366f1'],
+            borderWidth: 2,
+            borderColor: '#ffffff'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'bottom' }
           }
         }
-      }
+      });
     }
   }
 });
-
-// Attendance Chart
-const attData = <%- JSON.stringify(attendanceData) %>;
-const attMap = {};
-let totalAtt = 0;
-attData.forEach(a => {
-  attMap[a.status] = Number(a.count) || 0;
-  totalAtt += Number(a.count) || 0;
-});
-
-const attCanvasWrapper = document.getElementById('attCanvasWrapper');
-const attEmptyState = document.getElementById('attEmptyState');
-
-if (totalAtt === 0) {
-  attCanvasWrapper.classList.add('d-none');
-  attEmptyState.classList.remove('d-none');
-} else {
-  new Chart(document.getElementById('attChart'), {
-    type: 'doughnut',
-    data: {
-      labels: ['Present', 'Absent', 'Late', 'Leave'],
-      datasets: [{
-        data: [attMap['Present']||0, attMap['Absent']||0, attMap['Late']||0, attMap['Leave']||0],
-        backgroundColor: ['#22c55e','#ef4444','#f59e0b','#6366f1'],
-        borderWidth: 2,
-        borderColor: '#ffffff'
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { position: 'bottom' }
-      }
-    }
-  });
-}
 </script>

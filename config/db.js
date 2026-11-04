@@ -504,7 +504,27 @@ async function ensureSchema() {
       )
     `);
 
-    // 7. Ensure initial classes exist if table is empty
+    // 7. Activity Log & Audit Trail (7-Day History & Soft-Restore capability)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS activity_log (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        action_type ENUM('CREATE','UPDATE','DELETE','FEE_COLLECTED','ATTENDANCE_MARKED','LOGIN','PROMOTION','OTHER') NOT NULL DEFAULT 'OTHER',
+        entity_type VARCHAR(50) NOT NULL DEFAULT 'other',
+        entity_id INT DEFAULT NULL,
+        entity_name VARCHAR(255) DEFAULT NULL,
+        description TEXT DEFAULT NULL,
+        old_data JSON DEFAULT NULL,
+        new_data JSON DEFAULT NULL,
+        performed_by INT DEFAULT NULL,
+        performed_by_name VARCHAR(100) DEFAULT NULL,
+        ip_address VARCHAR(45) DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_log_created (created_at),
+        INDEX idx_log_entity (entity_type, entity_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+
+    // 8. Ensure initial classes exist if table is empty
     const [[{ classCount }]] = await pool.query('SELECT COUNT(*) as classCount FROM classes');
     if (classCount === 0) {
       await pool.query(`
@@ -523,21 +543,10 @@ async function ensureSchema() {
       console.log('✅ Default classes initialized (Class 1 to 10).');
     }
 
-    // 7. Auto-seed demo data once on initial deployment
-    try {
-      await pool.query(`CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR(50) PRIMARY KEY, setting_val VARCHAR(255))`);
-      const [[initSetting]] = await pool.query(`SELECT setting_val FROM system_settings WHERE setting_key = 'demo_initialized'`);
-      if (!initSetting) {
-        const { generateDemoData } = require('../utils/demoData');
-        await generateDemoData(1);
-        await pool.query(`INSERT INTO system_settings (setting_key, setting_val) VALUES ('demo_initialized', 'true') ON DUPLICATE KEY UPDATE setting_val = 'true'`);
-        console.log('✅ Initial demo data auto-populated for testing.');
-      }
-    } catch (dErr) {
-      console.log('Demo initial seed notice:', dErr.message);
-    }
+    // Ensure system_settings table exists
+    await pool.query(`CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR(50) PRIMARY KEY, setting_val VARCHAR(255))`);
 
-    // 8. Initialize dynamic school settings
+    // 9. Initialize dynamic school settings
     try {
       const { initSettings } = require('../utils/settingsHelper');
       await initSettings();

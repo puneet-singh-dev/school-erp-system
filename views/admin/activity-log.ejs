@@ -1,0 +1,188 @@
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+  <div>
+    <h4 class="fw-bold mb-1"><i class="fa-solid fa-clock-rotate-left me-2 text-primary"></i>Recent Activity &amp; Audit Log</h4>
+    <p class="text-muted mb-0 small">Track all operations across the school ERP (showing activities from the last <strong><%= days %></strong> days)</p>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="/admin" class="btn btn-sm btn-outline-secondary">
+      <i class="fa-solid fa-arrow-left me-1"></i>Back to Dashboard
+    </a>
+  </div>
+</div>
+
+<!-- Filters Card -->
+<div class="card shadow-sm border-0 mb-4">
+  <div class="card-body py-3">
+    <form method="GET" action="/admin/activity" class="row g-2 align-items-end">
+      <div class="col-lg-3 col-md-4 col-sm-6">
+        <label class="form-label small fw-semibold text-muted mb-1"><i class="fa-regular fa-calendar me-1"></i>Time Range</label>
+        <select name="days" class="form-select form-select-sm">
+          <option value="1" <%= Number(days) === 1 ? 'selected' : '' %>>Last 24 Hours</option>
+          <option value="7" <%= Number(days) === 7 ? 'selected' : '' %>>Last 7 Days (Default)</option>
+          <option value="15" <%= Number(days) === 15 ? 'selected' : '' %>>Last 15 Days</option>
+          <option value="30" <%= Number(days) === 30 ? 'selected' : '' %>>Last 30 Days</option>
+          <option value="90" <%= Number(days) === 90 ? 'selected' : '' %>>Last 90 Days</option>
+        </select>
+      </div>
+      <div class="col-lg-3 col-md-4 col-sm-6">
+        <label class="form-label small fw-semibold text-muted mb-1"><i class="fa-solid fa-bolt me-1"></i>Action Type</label>
+        <select name="type" class="form-select form-select-sm">
+          <option value="" <%= !filterType ? 'selected' : '' %>>All Actions</option>
+          <option value="CREATE" <%= filterType === 'CREATE' ? 'selected' : '' %>>Created (New Records)</option>
+          <option value="UPDATE" <%= filterType === 'UPDATE' ? 'selected' : '' %>>Updated / Edited</option>
+          <option value="DELETE" <%= filterType === 'DELETE' ? 'selected' : '' %>>Deleted Records</option>
+          <option value="FEE_COLLECTED" <%= filterType === 'FEE_COLLECTED' ? 'selected' : '' %>>Fee Collected</option>
+          <option value="ATTENDANCE_MARKED" <%= filterType === 'ATTENDANCE_MARKED' ? 'selected' : '' %>>Attendance Marked</option>
+          <option value="PROMOTION" <%= filterType === 'PROMOTION' ? 'selected' : '' %>>Academic Promotion</option>
+        </select>
+      </div>
+      <div class="col-lg-3 col-md-4 col-sm-6">
+        <label class="form-label small fw-semibold text-muted mb-1"><i class="fa-solid fa-shapes me-1"></i>Module / Entity</label>
+        <select name="entity" class="form-select form-select-sm">
+          <option value="" <%= !filterEntity ? 'selected' : '' %>>All Modules</option>
+          <option value="student" <%= filterEntity === 'student' ? 'selected' : '' %>>Students</option>
+          <option value="teacher" <%= filterEntity === 'teacher' ? 'selected' : '' %>>Teachers</option>
+          <option value="fee_payment" <%= filterEntity === 'fee_payment' ? 'selected' : '' %>>Fee Payments</option>
+          <option value="attendance" <%= filterEntity === 'attendance' ? 'selected' : '' %>>Attendance</option>
+          <option value="notice" <%= filterEntity === 'notice' ? 'selected' : '' %>>Notices</option>
+          <option value="class" <%= filterEntity === 'class' ? 'selected' : '' %>>Classes</option>
+        </select>
+      </div>
+      <div class="col-lg-3 col-md-12 col-sm-6 d-flex gap-2">
+        <button type="submit" class="btn btn-primary btn-sm flex-grow-1">
+          <i class="fa-solid fa-filter me-1"></i>Filter
+        </button>
+        <% if (filterType || filterEntity || Number(days) !== 7) { %>
+          <a href="/admin/activity" class="btn btn-outline-secondary btn-sm" title="Clear all filters">
+            <i class="fa-solid fa-rotate-left"></i>
+          </a>
+        <% } %>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Activity Feed Card -->
+<div class="card shadow-sm border-0">
+  <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+    <div class="fw-bold text-dark">
+      <i class="fa-solid fa-list-check me-2 text-primary"></i>Activity Log Stream
+      <span class="badge bg-primary-subtle text-primary border ms-2"><%= logs.length %> Records</span>
+    </div>
+    <div class="small text-muted">
+      <i class="fa-solid fa-shield-halved text-success me-1"></i>Soft-Delete Restore Available
+    </div>
+  </div>
+  <div class="card-body p-0">
+    <% if (!logs || logs.length === 0) { %>
+      <div class="text-center py-5">
+        <div class="mb-3 opacity-50">
+          <i class="fa-solid fa-clipboard-list fa-3x text-secondary"></i>
+        </div>
+        <h6 class="fw-semibold text-secondary mb-1">No Activities Found</h6>
+        <p class="text-muted small mb-0">No actions have been recorded matching your selected filters in the past <%= days %> days.</p>
+      </div>
+    <% } else { %>
+      <div class="list-group list-group-flush">
+        <% logs.forEach((log) => { %>
+          <%
+            let badgeClass = 'bg-secondary';
+            let iconClass = 'fa-circle-info';
+            let bgLight = 'bg-light';
+            
+            switch (log.action_type) {
+              case 'CREATE':
+                badgeClass = 'bg-success';
+                iconClass = 'fa-circle-plus';
+                bgLight = 'bg-success-subtle text-success';
+                break;
+              case 'UPDATE':
+                badgeClass = 'bg-warning text-dark';
+                iconClass = 'fa-pen-to-square';
+                bgLight = 'bg-warning-subtle text-warning';
+                break;
+              case 'DELETE':
+                badgeClass = 'bg-danger';
+                iconClass = 'fa-trash-can';
+                bgLight = 'bg-danger-subtle text-danger';
+                break;
+              case 'FEE_COLLECTED':
+                badgeClass = 'bg-info text-dark';
+                iconClass = 'fa-indian-rupee-sign';
+                bgLight = 'bg-info-subtle text-info';
+                break;
+              case 'ATTENDANCE_MARKED':
+                badgeClass = 'bg-primary';
+                iconClass = 'fa-clipboard-check';
+                bgLight = 'bg-primary-subtle text-primary';
+                break;
+              case 'PROMOTION':
+                badgeClass = 'bg-dark';
+                iconClass = 'fa-graduation-cap';
+                bgLight = 'bg-dark-subtle text-dark';
+                break;
+            }
+          %>
+          <div class="list-group-item p-3 border-bottom">
+            <div class="d-flex align-items-start gap-3">
+              <!-- Action Icon -->
+              <div class="rounded-circle d-flex align-items-center justify-content-center p-2 flex-shrink-0 <%= bgLight %>" style="width: 40px; height: 40px;">
+                <i class="fa-solid <%= iconClass %> fs-6"></i>
+              </div>
+
+              <!-- Main Content -->
+              <div class="flex-grow-1">
+                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-1">
+                  <div>
+                    <span class="badge <%= badgeClass %> me-1" style="font-size: 0.72rem;">
+                      <%= log.action_type.replace('_', ' ') %>
+                    </span>
+                    <span class="badge bg-light text-dark border me-1" style="font-size: 0.72rem; text-transform: uppercase;">
+                      <%= log.entity_type %>
+                    </span>
+                    <% if (log.entity_name) { %>
+                      <strong class="text-dark"><%= log.entity_name %></strong>
+                    <% } %>
+                  </div>
+                  <div class="text-muted small text-nowrap">
+                    <i class="fa-regular fa-clock me-1"></i>
+                    <%= new Date(log.created_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) %>
+                  </div>
+                </div>
+
+                <!-- Description -->
+                <% if (log.description) { %>
+                  <p class="mb-1 text-secondary small"><%= log.description %></p>
+                <% } %>
+
+                <!-- Metadata Row -->
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mt-2 pt-1">
+                  <div class="d-flex align-items-center gap-3 small text-muted">
+                    <% if (log.performed_by_name) { %>
+                      <span><i class="fa-regular fa-user me-1"></i>By: <strong><%= log.performed_by_name %></strong></span>
+                    <% } %>
+                    <% if (log.ip_address) { %>
+                      <span><i class="fa-solid fa-network-wired me-1"></i>IP: <%= log.ip_address %></span>
+                    <% } %>
+                  </div>
+
+                  <!-- Restore Action for Deleted Records -->
+                  <% if (log.action_type === 'DELETE' && log.old_data && (log.entity_type === 'student' || log.entity_type === 'teacher' || log.entity_type === 'notice')) { %>
+                    <div>
+                      <form action="/admin/activity/restore/<%= log.id %>" method="POST" class="d-inline"
+                            onsubmit="return confirm('Restore this deleted <%= log.entity_type %>? This will re-add <%= log.entity_name || 'them' %> back into the school system.');">
+                        <button type="submit" class="btn btn-sm btn-outline-success py-1 px-3 fw-semibold">
+                          <i class="fa-solid fa-rotate-left me-1"></i>Restore <%= log.entity_type.charAt(0).toUpperCase() + log.entity_type.slice(1) %>
+                        </button>
+                      </form>
+                    </div>
+                  <% } %>
+                </div>
+              </div>
+            </div>
+          </div>
+        <% }); %>
+      </div>
+    <% } %>
+  </div>
+</div>
