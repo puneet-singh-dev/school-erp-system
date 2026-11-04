@@ -232,22 +232,6 @@ router.get('/api/next-ids', async (req, res) => {
   }
 });
 
-// ==================== ONE-TIME CLEAN RESIDUAL DEMO DATA ====================
-router.get('/clean-demo-data', async (req, res) => {
-  try {
-    const [delRes] = await db.query(
-      "DELETE FROM users WHERE is_demo = 1 OR email LIKE '%.demo@school.erp' OR email LIKE '%@school.erp'"
-    );
-    await db.query("DELETE FROM system_settings WHERE setting_key = 'demo_initialized'");
-    req.flash('success_msg', `Successfully deleted ${delRes.affectedRows} demo records from database. System is completely clean!`);
-    res.redirect('/admin');
-  } catch (err) {
-    console.error('Clean demo error:', err);
-    req.flash('error_msg', 'Error cleaning demo data: ' + err.message);
-    res.redirect('/admin');
-  }
-});
-
 // ==================== STUDENTS ====================
 router.get('/students', async (req, res) => {
   const search = req.query.search || '';
