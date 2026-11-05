@@ -37,7 +37,7 @@
         </div>
         <div class="col-md-4">
           <label class="form-label">Email <small class="text-muted">(Optional)</small></label>
-          <input type="email" name="email" class="form-control" value="<%- student ? student.email : '' %>" placeholder="Optional (auto-generated if empty)">
+          <input type="email" name="email" class="form-control" value="<%- student && student.email ? student.email : '' %>" placeholder="Optional (leave blank if no email)">
         </div>
         <div class="col-md-4">
           <label class="form-label">Registered Mobile Phone *</label>

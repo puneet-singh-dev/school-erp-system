@@ -67,7 +67,7 @@ async function ensureSchema() {
       CREATE TABLE IF NOT EXISTS users (
         id INT AUTO_INCREMENT PRIMARY KEY,
         name VARCHAR(100) NOT NULL,
-        email VARCHAR(100) UNIQUE NOT NULL,
+        email VARCHAR(100) UNIQUE NULL DEFAULT NULL,
         password VARCHAR(255) NOT NULL,
         role ENUM('admin','teacher','student') NOT NULL,
         phone VARCHAR(15),
@@ -322,6 +322,13 @@ async function ensureSchema() {
           await pool.query(`ALTER TABLE users ADD COLUMN ${col.name} ${col.def}`);
         } catch (ignore) {}
       }
+    }
+
+    // Allow users.email to be NULL (for students without email)
+    try {
+      await pool.query('ALTER TABLE users MODIFY COLUMN email VARCHAR(100) NULL DEFAULT NULL');
+    } catch (e) {
+      // Ignore if already nullable or constrained
     }
 
     // Allow fee_structure_id to be nullable for composite/multi-component fees

@@ -328,10 +328,8 @@ router.post('/students/add', upload.single('profile_photo'), async (req, res) =>
       roll_number = maxRoll + 1;
     }
 
-    // Auto-generate placeholder email if blank
-    if (!email || email.trim() === '') {
-      email = `${admission_no.toLowerCase()}@school.erp`;
-    }
+    // Student email is strictly optional (no dummy email auto-generated)
+    const cleanEmail = (email && email.trim() !== '') ? email.trim() : null;
 
     const profilePhoto = req.file ? req.file.filename : 'default.png';
     const studentDefaultPassword = (password && password.trim()) || (phone && phone.trim()) || (emergency_contact && emergency_contact.trim()) || 'student123';
@@ -347,7 +345,7 @@ router.post('/students/add', upload.single('profile_photo'), async (req, res) =>
 
     const [userResult] = await db.query(
       'INSERT INTO users (name,email,password,role,phone,address,profile_photo,photo_data,photo_mime) VALUES (?,?,?,?,?,?,?,?,?)',
-      [name, email, hashed, 'student', phone || null, address || null, profilePhoto, photoData, photoMime]
+      [name, cleanEmail, hashed, 'student', phone || null, address || null, profilePhoto, photoData, photoMime]
     );
 
     const cleanUsesTransport = (uses_transport === '1' || uses_transport === 1 || uses_transport === true) ? 1 : 0;
@@ -421,6 +419,8 @@ router.post('/students/edit/:id', upload.single('profile_photo'), async (req, re
     }
 
     const userId = students[0].user_id;
+    const cleanEmail = (email && email.trim() !== '') ? email.trim() : null;
+
     if (req.file) {
       let photoData = null;
       let photoMime = req.file.mimetype || 'image/jpeg';
@@ -428,10 +428,10 @@ router.post('/students/edit/:id', upload.single('profile_photo'), async (req, re
         photoData = fs.readFileSync(req.file.path).toString('base64');
       } catch (err) {}
       await db.query('UPDATE users SET name=?,email=?,phone=?,address=?,profile_photo=?,photo_data=?,photo_mime=? WHERE id=?',
-        [name, email, phone, address, req.file.filename, photoData, photoMime, userId]);
+        [name, cleanEmail, phone, address, req.file.filename, photoData, photoMime, userId]);
     } else {
       await db.query('UPDATE users SET name=?,email=?,phone=?,address=? WHERE id=?',
-        [name, email, phone, address, userId]);
+        [name, cleanEmail, phone, address, userId]);
     }
 
     const cleanUsesTransport = (uses_transport === '1' || uses_transport === 1 || uses_transport === true) ? 1 : 0;
@@ -1179,6 +1179,7 @@ router.post('/fees/structure/delete/:id', async (req, res) => {
 
 router.get('/fees/collect', async (req, res) => {
   const [classes] = await db.query('SELECT * FROM classes ORDER BY name, section');
+  const settings = await getSettings();
   // Parse as integers — empty string becomes NaN, preventing broken SQL queries
   const class_id = parseInt(req.query.class_id) || null;
   const student_id = parseInt(req.query.student_id) || null;
@@ -1192,7 +1193,7 @@ router.get('/fees/collect', async (req, res) => {
     [payments] = await db.query(`SELECT fp.*, fs.fee_type, fs.amount as total_amount FROM fee_payments fp LEFT JOIN fee_structure fs ON fp.fee_structure_id=fs.id WHERE fp.student_id=? ORDER BY fp.payment_date DESC, fp.id DESC`, [student_id]);
     [[selectedStudent]] = await db.query(`SELECT s.*, u.name, u.phone, c.name as class_name, c.section, c.academic_year FROM students s JOIN users u ON s.user_id=u.id LEFT JOIN classes c ON s.class_id=c.id WHERE s.id=?`, [student_id]);
   }
-  res.render('admin/fee-collect', { title: 'Collect Fees', classes, students, feeStructures, payments, class_id, student_id, selectedStudent, new_receipt_id });
+  res.render('admin/fee-collect', { title: 'Collect Fees', classes, students, feeStructures, payments, class_id, student_id, selectedStudent, new_receipt_id, settings });
 });
 
 router.post('/fees/collect', async (req, res) => {
@@ -2498,7 +2499,15 @@ router.post('/change-password', async (req, res) => {
 router.get('/settings', async (req, res) => {
   try {
     const settings = await getSettings(true);
-    res.render('admin/settings', { title: 'School & System Settings', settings });
+    const [classes] = await db.query(`
+      SELECT c.id, c.name, c.section, c.academic_year,
+             (SELECT fs.amount FROM fee_structure fs 
+              WHERE fs.class_id = c.id AND (fs.fee_type LIKE '%Tuition%' OR fs.fee_type LIKE '%Tution%' OR fs.fee_type LIKE '%Monthly%') 
+              ORDER BY fs.id DESC LIMIT 1) as tuition_fee
+      FROM classes c 
+      ORDER BY c.name, c.section
+    `);
+    res.render('admin/settings', { title: 'School & System Settings', settings, classes });
   } catch (err) {
     console.error('Error loading settings:', err);
     req.flash('error_msg', 'Error loading settings: ' + err.message);
@@ -2509,6 +2518,41 @@ router.get('/settings', async (req, res) => {
 router.post('/settings/save', async (req, res) => {
   try {
     await updateSettings(req.body);
+
+    // Save class-wise tuition fee updates
+    const [classes] = await db.query('SELECT id, academic_year FROM classes');
+    for (const c of classes) {
+      const fieldKey = 'class_tuition_' + c.id;
+      if (req.body[fieldKey] !== undefined && req.body[fieldKey] !== '') {
+        const tAmt = Math.max(0, parseFloat(req.body[fieldKey]) || 0);
+        const [existing] = await db.query(
+          "SELECT id FROM fee_structure WHERE class_id = ? AND (fee_type LIKE '%Tuition%' OR fee_type LIKE '%Tution%' OR fee_type LIKE '%Monthly%') ORDER BY id DESC LIMIT 1",
+          [c.id]
+        );
+        if (existing.length > 0) {
+          await db.query("UPDATE fee_structure SET amount = ? WHERE id = ?", [tAmt, existing[0].id]);
+        } else {
+          await db.query(
+            "INSERT INTO fee_structure (class_id, fee_type, amount, academic_year) VALUES (?, 'Monthly Tuition Fee', ?, ?)",
+            [c.id, tAmt, c.academic_year || req.body.academic_year || '2026-27']
+          );
+        }
+      }
+    }
+
+    try {
+      await logActivity({
+        actionType: 'UPDATE',
+        entityType: 'settings',
+        entityId: null,
+        entityName: 'School & Fee Settings',
+        description: 'Updated school settings, fee components, and class tuition fee rates',
+        userId: req.session.user ? req.session.user.id : null,
+        userName: req.session.user ? req.session.user.name : 'Admin',
+        ip: req.ip
+      });
+    } catch (e) {}
+
     req.flash('success_msg', 'School & System Settings updated successfully!');
     res.redirect('/admin/settings');
   } catch (err) {

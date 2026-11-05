@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const { getSettings } = require('./settingsHelper');
 
 /**
  * Calculates month-by-month pending fees against the academic session calendar (APR - MAR).
@@ -46,6 +47,8 @@ async function getPendingFeeReport({ class_id = null, student_id = null, up_to_m
 
   // Fetch fee structures by class
   const [feeStructures] = await db.query('SELECT * FROM fee_structure');
+  const settings = await getSettings();
+  const fallbackTuition = parseFloat(settings.default_monthly_fee) || 500;
   const classFeeMap = {};
   feeStructures.forEach(fs => {
     if (!classFeeMap[fs.class_id]) classFeeMap[fs.class_id] = [];
@@ -74,7 +77,7 @@ async function getPendingFeeReport({ class_id = null, student_id = null, up_to_m
       const tuitionStruct = structs.find(st => st.fee_type && /tuit|tuition/i.test(st.fee_type)) || structs[0];
       monthlyTuition = parseFloat(tuitionStruct.amount) || 0;
     }
-    if (monthlyTuition <= 0) monthlyTuition = 500; // fallback sensible default
+    if (monthlyTuition <= 0) monthlyTuition = fallbackTuition; // settings-configured fallback rate
 
     // 2. Transport fee
     const monthlyVan = (s.uses_transport == 1 || s.uses_transport === true) ? (parseFloat(s.transport_fee) || 0) : 0;

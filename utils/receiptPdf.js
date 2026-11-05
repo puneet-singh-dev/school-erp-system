@@ -174,7 +174,8 @@ function drawReceiptVoucher(doc, p, x, y, w, h, copyType) {
 
   const totalItemsHeight = itemRowHeights.reduce((acc, curr) => acc + curr, 0);
   const summaryRowH = 12;
-  const tableBottomY = tableY + defaultRowH + totalItemsHeight + (summaryRowH * 3);
+  const itemsBottomY = tableY + defaultRowH + totalItemsHeight;
+  const tableBottomY = itemsBottomY + (summaryRowH * 3);
 
   // Table Header
   doc.rect(x + 4, tableY, w - 8, defaultRowH).fillAndStroke('#f0f0f0', '#000000');
@@ -184,7 +185,9 @@ function drawReceiptVoucher(doc, p, x, y, w, h, copyType) {
   doc.text('Amount (Rs.)', x + 4 + colSrW + colPartW, tableY + 2.5, { width: colAmtW - 5, align: 'right' });
 
   // Vertical column dividers
-  doc.moveTo(x + 4 + colSrW, tableY).lineTo(x + 4 + colSrW, tableBottomY).stroke('#000000');
+  // Note: Divider between 'Sr.' and 'Particulars' stops at itemsBottomY so it never crosses or overlaps summary rows (Total, Received, Balance)
+  doc.moveTo(x + 4 + colSrW, tableY).lineTo(x + 4 + colSrW, itemsBottomY).stroke('#000000');
+  // Divider before Amount goes all the way down to tableBottomY
   doc.moveTo(x + 4 + colSrW + colPartW, tableY).lineTo(x + 4 + colSrW + colPartW, tableBottomY).stroke('#000000');
 
   // Data rows (Individual fee components)
@@ -218,14 +221,14 @@ function drawReceiptVoucher(doc, p, x, y, w, h, copyType) {
   const totalRowY = runningY;
   doc.rect(x + 4, totalRowY, w - 8, summaryRowH).stroke('#000000');
   doc.font('Helvetica-Bold').fontSize(6.5).fillColor('#000000');
-  doc.text('Total Amount', x + 4 + 6, totalRowY + 2.5, { width: colSrW + colPartW - 10, align: 'left' });
+  doc.text('Total Amount:', x + 4 + 4, totalRowY + 2.5, { width: colSrW + colPartW - 8, align: 'right' });
   doc.text(totalAmount.toFixed(2), x + 4 + colSrW + colPartW, totalRowY + 2.5, { width: colAmtW - 5, align: 'right' });
 
   // Row: Received Amt
   const recRowY = totalRowY + summaryRowH;
   doc.rect(x + 4, recRowY, w - 8, summaryRowH).stroke('#000000');
   doc.font('Helvetica-Bold').fontSize(6.5).fillColor('#000000');
-  doc.text('Received Amt:', x + 4 + 6, recRowY + 2.5, { width: colSrW + colPartW - 10, align: 'left' });
+  doc.text('Received Amt:', x + 4 + 4, recRowY + 2.5, { width: colSrW + colPartW - 8, align: 'right' });
   doc.text(receivedAmount.toFixed(2), x + 4 + colSrW + colPartW, recRowY + 2.5, { width: colAmtW - 5, align: 'right' });
 
   // Row: Balance
@@ -233,7 +236,7 @@ function drawReceiptVoucher(doc, p, x, y, w, h, copyType) {
   const balance = Math.max(0, totalAmount - receivedAmount);
   doc.rect(x + 4, balRowY, w - 8, summaryRowH).stroke('#000000');
   doc.font('Helvetica-Bold').fontSize(6.5).fillColor('#000000');
-  doc.text('Balance:', x + 4 + 6, balRowY + 2.5, { width: colSrW + colPartW - 10, align: 'left' });
+  doc.text('Balance:', x + 4 + 4, balRowY + 2.5, { width: colSrW + colPartW - 8, align: 'right' });
   doc.text(balance.toFixed(2), x + 4 + colSrW + colPartW, balRowY + 2.5, { width: colAmtW - 5, align: 'right' });
 
   // 6. Amount in words & Payment Mode

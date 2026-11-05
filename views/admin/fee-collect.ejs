@@ -286,11 +286,11 @@
             <div class="card-body p-3">
               <!-- Quick Add Buttons -->
               <div class="d-flex flex-wrap gap-1 mb-2">
-                <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2 small quick-item-pill" data-name="Admission Fee" data-amt="1000">+ Admission Fee</button>
-                <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2 small quick-item-pill" data-name="Exam Fee" data-amt="300">+ Exam Fee</button>
-                <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2 small quick-item-pill" data-name="ID Card Fee" data-amt="100">+ ID Card Fee</button>
-                <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2 small quick-item-pill" data-name="Diary Fee" data-amt="150">+ Diary Fee</button>
-                <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2 small quick-item-pill" data-name="Annual Charge" data-amt="500">+ Annual Charge</button>
+                <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2 small quick-item-pill" data-name="Admission Fee" data-amt="<%- (typeof settings !== 'undefined' && settings.default_admission_fee) || 1000 %>">+ Admission Fee (₹<%- (typeof settings !== 'undefined' && settings.default_admission_fee) || 1000 %>)</button>
+                <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2 small quick-item-pill" data-name="Exam Fee" data-amt="<%- (typeof settings !== 'undefined' && settings.default_exam_fee) || 300 %>">+ Exam Fee (₹<%- (typeof settings !== 'undefined' && settings.default_exam_fee) || 300 %>)</button>
+                <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2 small quick-item-pill" data-name="ID Card Fee" data-amt="<%- (typeof settings !== 'undefined' && settings.default_id_card_fee) || 100 %>">+ ID Card Fee (₹<%- (typeof settings !== 'undefined' && settings.default_id_card_fee) || 100 %>)</button>
+                <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2 small quick-item-pill" data-name="Diary Fee" data-amt="<%- (typeof settings !== 'undefined' && settings.default_diary_fee) || 150 %>">+ Diary Fee (₹<%- (typeof settings !== 'undefined' && settings.default_diary_fee) || 150 %>)</button>
+                <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2 small quick-item-pill" data-name="Annual Charge" data-amt="<%- (typeof settings !== 'undefined' && settings.default_annual_charge) || 500 %>">+ Annual Charge (₹<%- (typeof settings !== 'undefined' && settings.default_annual_charge) || 500 %>)</button>
               </div>
 
               <!-- Container for other components -->
